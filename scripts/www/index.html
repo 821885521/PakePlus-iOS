@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智能车辆控制 · 智能仪表</title>
+    <style>
+        :root { 
+            --bg: #0b0d12; --panel: #14161c; --dial: #101218; 
+            --text-main: #e0f7fa; --text-sub: #80cbc4; --needle: #00e5ff; 
+            --danger: #ff1744; --gear-glow: #4ade80; --accent: #00e5ff; --ws-green: #00e676;
+            --warn: #ffab00;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: var(--bg); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; touch-action: none; overflow: hidden; }
+        
+        .top-section { flex-shrink: 0; background: var(--panel); padding: 10px 15px; border-bottom: 1px solid #222; border-radius: 0 0 15px 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); z-index: 10; display: flex; flex-direction: column; gap: 8px;}
+        .top-btn-group { display: flex; gap: 10px; }
+        .t-btn { flex: 1; padding: 10px 0; font-size: 13px; font-weight: bold; background: linear-gradient(to bottom, #333, #1a1a1a); color: #aaa; border: 1px solid #444; border-radius: 8px; outline: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5); cursor: pointer; transition: 0.1s; }
+        .t-btn:active { box-shadow: inset 0 4px 6px rgba(0,0,0,0.8); background: #111; transform: scale(0.98);}
+        .t-btn.on { color: var(--accent); border-color: var(--accent); text-shadow: 0 0 10px var(--accent); box-shadow: 0 0 15px rgba(0,229,255,0.2); }
+        .t-btn.danger { color: var(--danger); border-color: #441111; }
+        .t-btn.danger:active { background: #2a0000; }
+        .t-btn.danger.on { color: #fff; background: #661111; border-color: var(--danger); text-shadow: 0 0 10px var(--danger); box-shadow: 0 0 15px rgba(255,23,68,0.4); }
+        .t-btn.calibrating { color: var(--warn); border-color: var(--warn); animation: btnPulse 0.4s infinite alternate; }
+        @keyframes btnPulse { from { opacity: 0.55; } to { opacity: 1; } }
+
+        .top-status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #888; font-family: monospace; padding: 0 5px;}
+        .status-group { display: flex; gap: 12px; }
+        .stat-item { display: flex; align-items: center; gap: 5px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; transition: 0.3s; }
+        .status-dot.ws-connected { background: var(--ws-green); box-shadow: 0 0 8px var(--ws-green); }
+        .status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+        .val-text { color: var(--text-main); font-weight: bold; }
+
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; gap: 10px; min-height: 0; }
+
+        .dashboard { width: 100%; flex: 1; display: flex; justify-content: center; align-items: center; min-height: 0; }
+        .gauge-wrapper { 
+            position: relative; width: 100%; max-width: min(300px, 65vh); aspect-ratio: 1; 
+            background: radial-gradient(circle, #1a2230 0%, #10141d 68%, #07090d 100%); 
+            border-radius: 50%; 
+            box-shadow: inset 0 10px 30px rgba(0,0,0,0.9), 0 10px 25px rgba(0,0,0,0.7), 0 0 30px rgba(0,229,255,0.05); 
+            border: 4px solid #0c0e13; 
+            transition: box-shadow 0.3s, border-color 0.3s;
+        }
+        .gauge-wrapper.overload {
+            box-shadow: inset 0 0 30px rgba(255,23,68,0.25), 0 0 30px rgba(255,23,68,0.4), 0 0 50px rgba(255,23,68,0.15);
+            border-color: rgba(255,23,68,0.4);
+        }
+
+        .gauge-svg { width: 100%; height: 100%; display: block; }
+        
+        .speed-num { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            text-align: center; margin-top: 30px; pointer-events: none;
+        }
+        .speed-val { 
+            font-size: 40px; font-weight: 900; font-family: 'Courier New', monospace; 
+            color: var(--text-main); line-height: 1; transition: color 0.2s;
+            text-shadow: 0 0 15px rgba(224,247,250,0.25);
+        }
+        .speed-unit { font-size: 12px; color: var(--text-sub); font-weight: bold; margin-top: 2px; letter-spacing: 1px; }
+
+        .gyro-indicator {
+            position: absolute; bottom: 13%; left: 50%; transform: translateX(-50%);
+            width: 62%; height: 8px; background: #111; border-radius: 4px;
+            border: 1px solid #2a2f3a; overflow: visible;
+            pointer-events: none;
+            box-shadow: inset 0 2px 6px #000;
+        }
+        .gyro-indicator .gyro-track {
+            height: 100%; width: 100%; background: linear-gradient(90deg, #4ade80, #ffeb3b, #ff1744);
+            border-radius: 4px; opacity: 0.28;
+        }
+        .gyro-indicator .gyro-ball {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 18px; height: 18px; background: radial-gradient(circle, #fff, #00e5ff);
+            border-radius: 50%; box-shadow: 0 0 15px #00e5ff, 0 0 5px #fff;
+            transition: left 0.08s linear, background 0.2s;
+            border: 1px solid #fff;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .control-area { flex-shrink: 0; width: 100%; display: flex; justify-content: space-between; align-items: stretch; padding: 10px 10px; background: var(--panel); border-top: 1px solid #222; border-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); gap: 8px; height: 250px;}
+        
+        .steer-group { display: flex; flex-direction: column; justify-content: center; gap: 12px; height: 100%; flex-shrink: 0;}
+        .steer-btn { 
+            flex: 1; width: 56px; 
+            background: linear-gradient(180deg, #343434 0%, #1a1a1a 100%); 
+            border: 2px solid #4a4a4a; border-radius: 16px; 
+            display: flex; justify-content: center; align-items: center; 
+            box-shadow: 0 6px 12px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.1);
+            cursor: pointer; 
+            transition: transform 0.08s, box-shadow 0.08s, border-color 0.15s; 
+        }
+        .steer-btn.active { 
+            transform: scale(0.95) translateY(2px); 
+            background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%); 
+            border-color: var(--gear-glow); 
+            box-shadow: 0 0 18px rgba(74,222,128,0.45), inset 0 3px 8px rgba(0,0,0,0.8); 
+        }
+        .steer-btn.disabled { opacity: 0.35; pointer-events: none; }
+        .arrow-left { 
+            width: 0; height: 0; 
+            border-top: 11px solid transparent; border-bottom: 11px solid transparent; border-right: 18px solid #fff; 
+            filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); margin-right: 6px;
+        }
+        .arrow-right { 
+            width: 0; height: 0; 
+            border-top: 11px solid transparent; border-bottom: 11px solid transparent; border-left: 18px solid #fff; 
+            filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); margin-left: 6px;
+        }
+
+        .gear-container { position: relative; width: 68px; height: 100%; background: #050505; border-radius: 20px; border: 2px solid #333; box-shadow: inset 0 0 20px rgba(0,0,0,1), 0 5px 15px rgba(0,0,0,0.5); display: flex; justify-content: center; touch-action: none; flex-shrink: 0; }
+        .gear-track { position: absolute; top: 20px; bottom: 20px; width: 28px; background: linear-gradient(180deg, #111, #000, #111); border-radius: 15px; border: 1px solid #222; box-shadow: inset 0 0 15px rgba(0,0,0,1), 0 0 5px rgba(255,255,255,0.05); }
+        .gear-base { position: absolute; bottom: 10px; width: 60px; height: 80px; background: radial-gradient(ellipse at bottom, rgba(74, 222, 128, 0.4) 0%, transparent 70%); border-radius: 20px; pointer-events: none; z-index: 1; }
+        .gear-knob { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); width: 44px; height: 70px; background: linear-gradient(180deg, #2a2a2a 0%, #0a0a0a 100%); border-radius: 12px; border: 2px solid #555; box-shadow: 0 10px 20px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; z-index: 10; cursor: grab; transition: border-color 0.2s, box-shadow 0.2s; }
+        .gear-knob:active { cursor: grabbing; }
+        .gear-knob::before { content: ''; position: absolute; inset: -2px; border-radius: 12px; pointer-events: none; border: 2px solid transparent; border-top-color: var(--gear-glow); border-left-color: var(--gear-glow); border-right-color: var(--gear-glow); opacity: 0.8; box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); transition: 0.3s; }
+        .gear-screen { width: 30px; height: 30px; margin-top: 6px; background: #000; border-radius: 6px; border: 1px solid #333; box-shadow: inset 0 2px 5px rgba(0,0,0,1); display: flex; justify-content: center; align-items: center; font-size: 18px; font-weight: 900; font-family: 'Courier New', monospace; color: #fff; text-shadow: 0 0 10px #fff; transition: 0.2s; }
+        .gear-dot { width: 5px; height: 5px; border-radius: 50%; background: #222; margin-top: 6px; box-shadow: inset 0 1px 2px rgba(0,0,0,1); }
+        .gear-dot.active { background: var(--gear-glow); box-shadow: 0 0 8px var(--gear-glow); }
+
+        /* ===== 飞机油门推杆 ===== */
+        .throttle-group { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; width: 92px; flex-shrink: 0; }
+        .throttle-label { font-size: 12px; font-weight: 700; color: #888; letter-spacing: 2px; }
+        .throttle-pad {
+            flex: 1; width: 100%; position: relative;
+            background: #050505; border-radius: 20px; border: 2px solid #333;
+            box-shadow: inset 0 0 20px rgba(0,0,0,1), 0 5px 15px rgba(0,0,0,0.5);
+            touch-action: none; overflow: hidden;
+            transition: border-color 0.2s, opacity 0.2s;
+        }
+        .throttle-pad.disabled { opacity: 0.35; pointer-events: none; }
+        .throttle-track {
+            position: absolute; top: 20px; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 16px; background: #0a0a0a; border-radius: 8px;
+            border: 1px solid #222; box-shadow: inset 0 0 10px rgba(0,0,0,1);
+        }
+        .throttle-fill {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 16px; height: 0;
+            background: linear-gradient(to top, #4ade80, #ffeb3b, #ff1744);
+            border-radius: 8px; opacity: 0.55;
+            transition: height 0.06s linear;
+        }
+        .throttle-handle {
+            position: absolute; left: 50%; transform: translateX(-50%);
+            bottom: 20px; width: 72px; height: 52px;
+            background: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 45%, #151515 100%);
+            border: 2px solid #6a6a6a; border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.9), inset 0 2px 0 rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.6);
+            cursor: grab; z-index: 10;
+            display: flex; justify-content: center; align-items: center;
+            touch-action: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .throttle-handle:active { cursor: grabbing; }
+        .throttle-handle.dragging { border-color: var(--accent); box-shadow: 0 0 18px rgba(0,229,255,0.45), inset 0 2px 0 rgba(255,255,255,0.2); }
+        .handle-grip {
+            width: 80%; height: 60%;
+            background: repeating-linear-gradient(0deg, transparent 0 4px, rgba(0,0,0,0.55) 4px 7px);
+            border-radius: 4px; opacity: 0.7;
+        }
+        .throttle-value {
+            font-size: 12px; font-weight: 900; font-family: 'Courier New', monospace;
+            color: var(--accent); text-shadow: 0 0 8px rgba(0,229,255,0.5);
+            letter-spacing: 1px; min-width: 40px; text-align: center;
+        }
+        .throttle-marks {
+            position: absolute; top: 18px; bottom: 18px; right: 6px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            font-size: 8px; color: #555; font-family: monospace; font-weight: 700;
+            pointer-events: none; letter-spacing: 1px;
+        }
+
+        body.handbrake-on::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 999; border: 4px solid var(--danger); box-shadow: inset 0 0 30px rgba(255,23,68,0.5); animation: hbPulse 0.8s infinite alternate; }
+        @keyframes hbPulse { from { opacity: 0.25; box-shadow: inset 0 0 15px rgba(255,23,68,0.3); } to { opacity: 1; box-shadow: inset 0 0 40px rgba(255,23,68,0.7); } }
+
+        body.failsafe::after {
+            content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 998;
+            border: 4px solid var(--warn);
+            box-shadow: inset 0 0 40px rgba(255,171,0,0.4);
+            animation: fsPulse 0.6s infinite alternate;
+        }
+        body.failsafe::before {
+            content: '信号丢失 · 失控保护';
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: var(--warn); font-size: 18px; font-weight: 900; font-family: monospace;
+            text-shadow: 0 0 20px rgba(255,171,0,0.9);
+            pointer-events: none; z-index: 1000;
+            animation: fsPulse 0.6s infinite alternate;
+            white-space: nowrap;
+        }
+        @keyframes fsPulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+        @media (orientation: landscape) {
+            .top-section { flex-direction: row; align-items: center; padding: 5px 15px; gap: 20px; }
+            .top-btn-group { width: 45%; }
+            .top-status-bar { flex: 1; }
+            .t-btn { padding: 8px 0; font-size: 12px; }
+            .main-wrapper { flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 20px; gap: 20px;}
+            .dashboard { order: 2; width: 40%; max-width: 400px; height: 100%;}
+            .gauge-wrapper { max-width: min(350px, 80vh); }
+            .left-controls { order: 1; width: 30%; display: flex; flex-direction: row; align-items: center; justify-content: space-around; height: 80%;}
+            .right-controls { order: 3; width: 30%; display: flex; flex-direction: row; align-items: center; justify-content: space-around; height: 80%;}
+            .control-area { display: contents; }
+            .steer-group { height: 100%; justify-content: center; gap: 10px; width: 45%; }
+            .steer-btn { height: 45%; width: 100%; }
+            .gear-container { height: 100%; width: 45%; }
+            .throttle-group { height: 100%; width: 80px; }
+            .gyro-indicator { bottom: 12%; width: 60%; }
+            .speed-num { margin-top: 26px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-section">
+        <div class="top-btn-group">
+            <button class="t-btn" id="btnFullScreen">全屏</button>
+            <button class="t-btn" id="btnLamp">大灯</button>
+            <button class="t-btn" id="btnGyro">体感</button>
+            <button class="t-btn" id="btnModeSport">运动</button>
+            <button class="t-btn" id="btnModeComfort">舒适</button>
+            <button class="t-btn" id="btnModeLow">低速</button>
+            <button class="t-btn danger" id="btnHandbrake">手刹</button>
+        </div>
+        <div class="top-status-bar">
+            <div class="status-group">
+                <div class="stat-item"><span class="status-dot" id="wsDot"></span><span id="wsText">网页断连</span></div>
+                <div class="stat-item"><span class="status-dot" id="rcDot"></span><span id="rcText">遥控断开</span></div>
+            </div>
+            <div class="status-group">
+                <div class="stat-item">P: <span class="val-text" id="valPitch">0.0</span>°</div>
+                <div class="stat-item">R: <span class="val-text" id="valRoll">0.0</span>°</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <div class="dashboard">
+            <div class="gauge-wrapper" id="gaugeWrapper">
+                <svg class="gauge-svg" viewBox="0 0 200 200">
+                    <defs>
+                        <linearGradient id="arcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%"   stop-color="#00e5ff"/>
+                            <stop offset="45%"  stop-color="#4ade80"/>
+                            <stop offset="75%"  stop-color="#ffeb3b"/>
+                            <stop offset="100%" stop-color="#ff1744"/>
+                        </linearGradient>
+                        <linearGradient id="needleGrad" gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="22">
+                            <stop offset="0%"   stop-color="#00e5ff" stop-opacity="0.5"/>
+                            <stop offset="55%"  stop-color="#7df9ff" stop-opacity="0.9"/>
+                            <stop offset="100%" stop-color="#ffffff"/>
+                        </linearGradient>
+                        <radialGradient id="hubGrad">
+                            <stop offset="0%"   stop-color="#ffffff"/>
+                            <stop offset="45%"  stop-color="#7df9ff"/>
+                            <stop offset="100%" stop-color="#00b8d4"/>
+                        </radialGradient>
+                        <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+                            <feGaussianBlur stdDeviation="2" result="b"/>
+                            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                        </filter>
+                    </defs>
+
+                    <circle cx="100" cy="100" r="90" fill="none" stroke="#0c0e13" stroke-width="10"/>
+
+                    <circle id="speedArc" cx="100" cy="100" r="90" fill="none"
+                            stroke="url(#arcGrad)" stroke-width="6" stroke-linecap="round"
+                            stroke-dasharray="0 999" transform="rotate(135 100 100)"
+                            filter="url(#glow)" opacity="0.95"/>
+
+                    <g id="ticks"></g>
+                    <g id="numbers"></g>
+
+                    <g id="needleGroup" style="transition: transform 0.1s linear;">
+                        <path d="M100,22 L102,92 L100,100 L98,92 Z" fill="url(#needleGrad)" filter="url(#glow)"/>
+                        <circle cx="100" cy="24" r="2.2" fill="#ffffff"/>
+                    </g>
+
+                    <circle cx="100" cy="100" r="15" fill="#0b0d10" stroke="#2a2f3a" stroke-width="2"/>
+                    <circle cx="100" cy="100" r="6" fill="url(#hubGrad)" filter="url(#glow)"/>
+                </svg>
+                <div class="speed-num">
+                    <div class="speed-val" id="valSpeed">0</div>
+                    <div class="speed-unit">公里/小时</div>
+                </div>
+                <div class="gyro-indicator" id="gyroIndicator">
+                    <div class="gyro-track"></div>
+                    <div class="gyro-ball" id="gyroBall" style="left: 50%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-area">
+            <div class="left-controls">
+                <div class="steer-group">
+                    <div class="steer-btn" id="btnLeft"><div class="arrow-left"></div></div>
+                    <div class="steer-btn" id="btnRight"><div class="arrow-right"></div></div>
+                </div>
+            </div>
+
+            <div class="gear-container" id="gearPad">
+                <div class="gear-base"></div>
+                <div class="gear-track"></div>
+                <div class="gear-knob" id="gearKnob">
+                    <div class="gear-screen" id="gearScreen">N</div>
+                    <div class="gear-dot" id="gearDot"></div>
+                </div>
+            </div>
+
+            <div class="right-controls">
+                <div class="throttle-group">
+                    <div class="throttle-label">油门</div>
+                    <div class="throttle-pad" id="throttlePad">
+                        <div class="throttle-track"></div>
+                        <div class="throttle-fill" id="throttleFill"></div>
+                        <div class="throttle-marks">
+                            <span>MAX</span>
+                            <span>0</span>
+                        </div>
+                        <div class="throttle-handle" id="throttleHandle">
+                            <div class="handle-grip"></div>
+                        </div>
+                    </div>
+                    <div class="throttle-value" id="throttleValue">0%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ============================================================
+    //  配置
+    // ============================================================
+    const MODE_CFG = [
+        { speedMax: 150 },
+        { speedMax: 100 },
+        { speedMax: 40  },
+    ];
+    const SEND_INTERVAL   = 20;
+    const WS_RECON_MIN    = 2000;
+    const WS_RECON_MAX    = 15000;
+    const WATCHDOG_MS     = 5000;
+    const RC_TIMEOUT_MS   = 2000;
+    const GYRO_DEADZONE   = 4;
+    const GYRO_MAX_TILT   = 25;
+    const GYRO_CALIB_N    = 20;
+
+    // ============================================================
+    //  统一状态
+    // ============================================================
+    const State = {
+        controlMode: 'manual',
+        gear: 'N',
+        handbrake: false,
+        lamp: 0,
+        driveMode: 0,
+        steerTarget: 0, steerOut: 0,
+        throttleTarget: 0, throttleOut: 0,
+        speedTarget: 0,
+        displaySpeed: 0,
+    };
+
+    const pointerMap = new Map();
+
+    let rcOnline = false;
+    let rcC1 = 512;
+    let lastRcTime = 0;
+    let rcSuppressUntil = 0;
+
+    let gyroState = 'off';
+    let gyroSamples = [];
+    let gyroZero = { beta: 0, gamma: 0 };
+    let gyroRaw  = { beta: 0, gamma: 0 };
+
+    let ws = null;
+    let reconnectDelay = WS_RECON_MIN;
+    let lastWsMsgTime = 0;
+    let gotFirstMsg = false;
+    let lastSendTime = 0;
+    let dirty = true;
+
+    let lastFrameTime = performance.now();
+    let lastShown = -1;
+    let overloadActive = false;
+    let failsafeActive = false;
+
+    // ============================================================
+    //  DOM
+    // ============================================================
+    const valSpeed     = document.getElementById('valSpeed');
+    const gyroBall     = document.getElementById('gyroBall');
+    const gaugeWrapper = document.getElementById('gaugeWrapper');
+    const needleGroup  = document.getElementById('needleGroup');
+    const ticksGroup   = document.getElementById('ticks');
+    const numbersGroup = document.getElementById('numbers');
+    const speedArc     = document.getElementById('speedArc');
+    const btnLeft      = document.getElementById('btnLeft');
+    const btnRight     = document.getElementById('btnRight');
+    const gearKnob     = document.getElementById('gearKnob');
+    const gearScreen   = document.getElementById('gearScreen');
+    const gearDot      = document.getElementById('gearDot');
+    const btnGyro      = document.getElementById('btnGyro');
+    const btnHandbrake = document.getElementById('btnHandbrake');
+    const btnLamp      = document.getElementById('btnLamp');
+    const wsDot        = document.getElementById('wsDot');
+    const wsText       = document.getElementById('wsText');
+    const rcDot        = document.getElementById('rcDot');
+    const rcText       = document.getElementById('rcText');
+    const valPitch     = document.getElementById('valPitch');
+    const valRoll      = document.getElementById('valRoll');
+
+    const throttlePad    = document.getElementById('throttlePad');
+    const throttleFill   = document.getElementById('throttleFill');
+    const throttleHandle = document.getElementById('throttleHandle');
+    const throttleValue  = document.getElementById('throttleValue');
+
+    const ARC_FULL = 2 * Math.PI * 90 * (270 / 360);
+    const gears = [ { name: 'D', pct: 0.08 }, { name: 'N', pct: 0.4 }, { name: 'R', pct: 0.72 } ];
+    let currentGearIdx = 1;
+    const modeBtns = {
+        0: document.getElementById('btnModeSport'),
+        1: document.getElementById('btnModeComfort'),
+        2: document.getElementById('btnModeLow'),
+    };
+
+    // ============================================================
+    //  刻度初始化
+    // ============================================================
+    for (let i = 0; i <= 150; i += 5) {
+        const angle = -135 + (i / 150) * 270;
+        const isMajor = i % 10 === 0;
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', '100');
+        tick.setAttribute('y1', isMajor ? '10' : '12');
+        tick.setAttribute('x2', '100');
+        tick.setAttribute('y2', '20');
+        tick.setAttribute('stroke', isMajor ? 'rgba(224,247,250,0.85)' : 'rgba(128,203,196,0.45)');
+        tick.setAttribute('stroke-width', isMajor ? '2.5' : '1.2');
+        tick.setAttribute('transform', `rotate(${angle} 100 100)`);
+        ticksGroup.appendChild(tick);
+
+        if (isMajor) {
+            const rad = (angle - 90) * Math.PI / 180;
+            const r = 70;
+            const cx = 100 + r * Math.cos(rad);
+            const cy = 100 + r * Math.sin(rad);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', cx);
+            text.setAttribute('y', cy);
+            text.setAttribute('fill', 'rgba(224,247,250,0.85)');
+            text.setAttribute('font-size', i >= 100 ? '10' : '12');
+            text.setAttribute('font-weight', 'bold');
+            text.setAttribute('font-family', "'Courier New', monospace");
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('transform', `rotate(${angle} ${cx} ${cy})`);
+            text.textContent = i;
+            numbersGroup.appendChild(text);
+        }
+    }
+
+    // ============================================================
+    //  工具
+    // ============================================================
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    function expSmooth(cur, target, rate, dt) { return cur + (target - cur) * (1 - Math.exp(-rate * dt)); }
+
+    // ============================================================
+    //  飞机油门推杆
+    // ============================================================
+    let throttlePct = 0;         // 0~1
+    let throttleDragging = false;
+
+    function updateThrottleVisual(pct) {
+        throttlePct = clamp(pct, 0, 1);
+        const padH = throttlePad.clientHeight;
+        const handleH = throttleHandle.offsetHeight;
+        const trackH = padH - 40;
+        const travel = Math.max(0, trackH - handleH);
+        const bottomPx = 20 + throttlePct * travel;
+
+        throttleHandle.style.bottom = bottomPx + 'px';
+        throttleFill.style.height = (throttlePct * trackH) + 'px';
+        throttleValue.innerText = Math.round(throttlePct * 100) + '%';
+        dirty = true;
+    }
+
+    function pctFromClientY(clientY) {
+        const rect = throttlePad.getBoundingClientRect();
+        const padH = rect.height;
+        const handleH = throttleHandle.offsetHeight;
+        const trackH = padH - 40;
+        const travel = Math.max(0, trackH - handleH);
+        if (travel <= 0) return 0;
+        const y = clientY - rect.top;
+        let bottom = padH - y - handleH / 2;
+        bottom = clamp(bottom, 20, 20 + travel);
+        return (bottom - 20) / travel;
+    }
+
+    throttleHandle.addEventListener('pointerdown', (e) => {
+        if (State.handbrake || State.gear === 'N') return;
+        e.preventDefault();
+        if (State.controlMode === 'rc') {
+            State.controlMode = 'manual';
+            rcSuppressUntil = Date.now() + RC_TIMEOUT_MS;
+        }
+        throttleDragging = true;
+        throttleHandle.classList.add('dragging');
+        try { throttleHandle.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    throttleHandle.addEventListener('pointermove', (e) => {
+        if (!throttleDragging) return;
+        e.preventDefault();
+        updateThrottleVisual(pctFromClientY(e.clientY));
+    });
+
+    function endThrottleDrag(e) {
+        if (!throttleDragging) return;
+        throttleDragging = false;
+        throttleHandle.classList.remove('dragging');
+        try { throttleHandle.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    throttleHandle.addEventListener('pointerup', endThrottleDrag);
+    throttleHandle.addEventListener('pointercancel', endThrottleDrag);
+
+    // 点击轨道直接跳转
+    throttlePad.addEventListener('pointerdown', (e) => {
+        if (e.target === throttleHandle || throttleHandle.contains(e.target)) return;
+        if (State.handbrake || State.gear === 'N') return;
+        e.preventDefault();
+        if (State.controlMode === 'rc') {
+            State.controlMode = 'manual';
+            rcSuppressUntil = Date.now() + RC_TIMEOUT_MS;
+        }
+        updateThrottleVisual(pctFromClientY(e.clientY));
+    });
+
+    window.addEventListener('resize', () => updateThrottleVisual(throttlePct));
+
+    // ============================================================
+    //  方向键输入
+    // ============================================================
+    function setSteerPointer(id, action) {
+        if (State.handbrake) return;
+        if (State.controlMode === 'gyro') return;
+        if (State.controlMode === 'rc') {
+            State.controlMode = 'manual';
+            rcSuppressUntil = Date.now() + RC_TIMEOUT_MS;
+        }
+        pointerMap.set(id, action);
+        updateButtonUI();
+        dirty = true;
+    }
+    function clearSteerPointer(id) {
+        if (!pointerMap.has(id)) return;
+        pointerMap.delete(id);
+        updateButtonUI();
+        dirty = true;
+    }
+    function clearAllSteerPointers() {
+        if (pointerMap.size === 0) return;
+        pointerMap.clear();
+        updateButtonUI();
+        dirty = true;
+    }
+    function updateButtonUI() {
+        const acts = new Set(pointerMap.values());
+        btnLeft.classList.toggle('active', acts.has('left'));
+        btnRight.classList.toggle('active', acts.has('right'));
+    }
+
+    btnLeft.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        setSteerPointer(e.pointerId, 'left');
+    });
+    btnRight.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        setSteerPointer(e.pointerId, 'right');
+    });
+
+    window.addEventListener('pointerup', (e) => clearSteerPointer(e.pointerId));
+    window.addEventListener('pointercancel', (e) => clearSteerPointer(e.pointerId));
+    window.addEventListener('blur', clearAllSteerPointers);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            clearAllSteerPointers();
+            State.steerTarget = 0;
+            State.steerOut = 0;
+            if (ws && ws.readyState === 1) {
+                ws.send(`c1:512,c2:512,c3:${State.lamp},mode:${State.driveMode},hb:${State.handbrake ? 1 : 0}`);
+            }
+        }
+    });
+
+    // ============================================================
+    //  体感
+    // ============================================================
+    function getScreenAngle() {
+        if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+        if (typeof window.orientation === 'number') return window.orientation;
+        return 0;
+    }
+
+    function getTilt() {
+        const angle = getScreenAngle();
+        if (angle === 90) return -(gyroRaw.beta - gyroZero.beta);
+        if (angle === 270 || angle === -90) return (gyroRaw.beta - gyroZero.beta);
+        return (gyroRaw.gamma - gyroZero.gamma);
+    }
+
+    function onOrientation(e) {
+        const beta  = e.beta  || 0;
+        const gamma = e.gamma || 0;
+        if (gyroState === 'calibrating') {
+            gyroSamples.push({ beta, gamma });
+            if (gyroSamples.length >= GYRO_CALIB_N) {
+                let sb = 0, sg = 0;
+                for (const s of gyroSamples) { sb += s.beta; sg += s.gamma; }
+                gyroZero.beta  = sb / gyroSamples.length;
+                gyroZero.gamma = sg / gyroSamples.length;
+                gyroSamples = [];
+                gyroState = 'active';
+                btnGyro.classList.remove('calibrating');
+                btnGyro.innerText = '体感';
+            }
+            return;
+        }
+        gyroRaw.beta  = beta;
+        gyroRaw.gamma = gamma;
+    }
+
+    async function toggleGyro() {
+        if (gyroState !== 'off') { exitGyro(); return; }
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const state = await DeviceOrientationEvent.requestPermission();
+                if (state !== 'granted') return;
+            } catch (err) { return; }
+        }
+        enterGyro();
+    }
+
+    function enterGyro() {
+        gyroState = 'calibrating';
+        gyroSamples = [];
+        gyroRaw.beta = 0; gyroRaw.gamma = 0;
+        gyroZero.beta = 0; gyroZero.gamma = 0;
+        State.controlMode = 'gyro';
+        State.steerTarget = 0;
+        btnGyro.classList.add('on', 'calibrating');
+        btnGyro.innerText = '校准中';
+        btnLeft.classList.add('disabled');
+        btnRight.classList.add('disabled');
+        clearAllSteerPointers();
+        window.addEventListener('deviceorientation', onOrientation);
+        dirty = true;
+    }
+
+    function exitGyro() {
+        gyroState = 'off';
+        window.removeEventListener('deviceorientation', onOrientation);
+        btnGyro.classList.remove('on', 'calibrating');
+        btnGyro.innerText = '体感';
+        btnLeft.classList.remove('disabled');
+        btnRight.classList.remove('disabled');
+        if (State.controlMode === 'gyro') State.controlMode = 'manual';
+        State.steerTarget = 0;
+        dirty = true;
+    }
+
+    // ============================================================
+    //  主循环
+    // ============================================================
+    function computeInputTargets() {
+        if (State.handbrake) {
+            State.steerTarget = 0;
+            State.throttleTarget = 0;
+            return;
+        }
+        if (State.controlMode === 'rc') return;
+
+        // 转向
+        if (State.controlMode === 'gyro') {
+            if (gyroState === 'active') {
+                const tilt = getTilt();
+                State.steerTarget = Math.abs(tilt) > GYRO_DEADZONE
+                    ? clamp(tilt / GYRO_MAX_TILT, -1, 1)
+                    : 0;
+            } else {
+                State.steerTarget = 0;
+            }
+        } else {
+            const acts = new Set(pointerMap.values());
+            if (acts.has('left'))  State.steerTarget = -1;
+            else if (acts.has('right')) State.steerTarget = 1;
+            else State.steerTarget = 0;
+        }
+
+        // 油门：飞机推杆位置直接映射
+        if (State.gear === 'N') {
+            State.throttleTarget = 0;
+        } else {
+            State.throttleTarget = throttlePct;
+        }
+    }
+
+    function smoothOutputs(dt) {
+        const tRate = Math.abs(State.throttleTarget) > Math.abs(State.throttleOut) ? 6 : 12;
+        State.throttleOut = expSmooth(State.throttleOut, State.throttleTarget, tRate, dt);
+        if (Math.abs(State.throttleOut) < 0.005) State.throttleOut = 0;
+
+        let sRate = Math.abs(State.steerTarget) > Math.abs(State.steerOut) ? 12 : 18;
+        if (State.controlMode === 'gyro') sRate = 15;
+        State.steerOut = expSmooth(State.steerOut, State.steerTarget, sRate, dt);
+        if (Math.abs(State.steerOut) < 0.005) State.steerOut = 0;
+    }
+
+    function computeC1() {
+        if (State.gear === 'N') return 512;
+        const t = State.throttleOut;
+        if (State.gear === 'D') return Math.round(512 + t * 512);
+        return Math.round(512 - t * 512);
+    }
+
+    function computeSpeedTarget() {
+        let c1;
+        if (State.controlMode === 'rc' && rcOnline) c1 = rcC1;
+        else c1 = computeC1();
+        const max = MODE_CFG[State.driveMode].speedMax;
+        return Math.abs(c1 - 512) / 512 * max;
+    }
+
+    function shouldSendLocally() {
+        if (State.handbrake) return true;
+        if (State.controlMode === 'gyro') return true;
+        if (pointerMap.size > 0) return true;
+        if (throttlePct > 0.001) return true;
+        if (State.controlMode === 'rc' && rcOnline) return false;
+        return true;
+    }
+
+    function sendCommand() {
+        if (!ws || ws.readyState !== 1) return;
+        if (State.handbrake) {
+            ws.send(`c1:512,c2:512,c3:${State.lamp},mode:${State.driveMode},hb:1`);
+            return;
+        }
+        const c1 = computeC1();
+        const c2 = Math.round(512 + State.steerOut * 512);
+        ws.send(`c1:${c1},c2:${c2},c3:${State.lamp},mode:${State.driveMode},hb:0`);
+    }
+
+    function maybeSend(now) {
+        if (!ws || ws.readyState !== 1) return;
+        if (now - lastSendTime < SEND_INTERVAL) return;
+        if (!shouldSendLocally()) { lastSendTime = now; return; }
+
+        const active = pointerMap.size > 0
+            || Math.abs(State.throttleOut) > 0.001
+            || Math.abs(State.steerOut) > 0.001
+            || State.handbrake
+            || State.controlMode === 'gyro'
+            || dirty;
+
+        if (!active && now - lastSendTime < 100) return;
+
+        sendCommand();
+        lastSendTime = now;
+        dirty = false;
+    }
+
+    function renderGauge() {
+        const shown = Math.round(State.displaySpeed);
+        if (shown !== lastShown) {
+            valSpeed.innerText = shown;
+            lastShown = shown;
+            valSpeed.style.color = shown > 120 ? 'var(--danger)' : 'var(--text-main)';
+        }
+        const ratio = clamp(State.displaySpeed / 150, 0, 1);
+        needleGroup.setAttribute('transform', `rotate(${-135 + ratio * 270} 100 100)`);
+        speedArc.setAttribute('stroke-dasharray', `${(ratio * ARC_FULL).toFixed(1)} ${ARC_FULL.toFixed(1)}`);
+
+        const overload = State.displaySpeed > 120;
+        if (overload !== overloadActive) {
+            overloadActive = overload;
+            gaugeWrapper.classList.toggle('overload', overload);
+        }
+    }
+
+    function mainLoop(now) {
+        const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        computeInputTargets();
+        smoothOutputs(dt);
+
+        State.speedTarget = computeSpeedTarget();
+        State.displaySpeed = expSmooth(State.displaySpeed, State.speedTarget, 10, dt);
+        if (Math.abs(State.displaySpeed - State.speedTarget) < 0.1) State.displaySpeed = State.speedTarget;
+
+        maybeSend(now);
+        renderGauge();
+
+        requestAnimationFrame(mainLoop);
+    }
+
+    // ============================================================
+    //  WebSocket
+    // ============================================================
+    function initWS() {
+        try {
+            ws = new WebSocket('ws://192.168.4.1:81/');
+        } catch (e) {
+            setTimeout(initWS, reconnectDelay);
+            reconnectDelay = Math.min(WS_RECON_MAX, reconnectDelay * 1.5);
+            return;
+        }
+
+        ws.onopen = () => {
+            wsDot.className = 'status-dot ws-connected';
+            wsText.innerText = '小车在线';
+            reconnectDelay = WS_RECON_MIN;
+            gotFirstMsg = false;
+            lastWsMsgTime = Date.now();
+            exitFailSafe();
+            dirty = true;
+        };
+
+        ws.onclose = () => {
+            wsDot.className = 'status-dot error';
+            wsText.innerText = '断开连接';
+            enterFailSafe();
+            setTimeout(initWS, reconnectDelay);
+            reconnectDelay = Math.min(WS_RECON_MAX, reconnectDelay * 1.5);
+        };
+
+        ws.onerror = () => {};
+
+        ws.onmessage = (event) => {
+            lastWsMsgTime = Date.now();
+            gotFirstMsg = true;
+
+            const data = event.data.split(',');
+            if (data.length < 8) return;
+
+            const p = parseFloat(data[0]);
+            const r = parseFloat(data[1]);
+            const sig = data[3];
+            const c1 = parseInt(data[5]);
+            const srvMode = parseInt(data[6]);
+            const srvHb = parseInt(data[7]);
+
+            if (!isNaN(p)) valPitch.innerText = p.toFixed(1);
+            if (!isNaN(r)) {
+                valRoll.innerText = r.toFixed(1);
+                updateGyroBall(r);
+            }
+
+            if (sig === '1') {
+                lastRcTime = Date.now();
+                if (!rcOnline) {
+                    rcOnline = true;
+                    rcDot.className = 'status-dot ws-connected';
+                    rcText.innerText = '遥控在线';
+                }
+                if (!isNaN(c1)) rcC1 = c1;
+            }
+
+            if (!isNaN(srvMode) && srvMode !== State.driveMode) {
+                applyModeUI(srvMode);
+            }
+            if (!isNaN(srvHb)) {
+                const hb = srvHb === 1;
+                if (hb !== State.handbrake) {
+                    State.handbrake = hb;
+                    btnHandbrake.classList.toggle('on', hb);
+                    document.body.classList.toggle('handbrake-on', hb);
+                    if (hb) {
+                        clearAllSteerPointers();
+                        updateThrottleVisual(0);
+                        if (gyroState !== 'off') exitGyro();
+                    }
+                }
+            }
+        };
+    }
+
+    function enterFailSafe() {
+        if (failsafeActive) return;
+        failsafeActive = true;
+        document.body.classList.add('failsafe');
+        clearAllSteerPointers();
+        if (gyroState !== 'off') exitGyro();
+        State.controlMode = 'manual';
+        State.steerTarget = 0; State.throttleTarget = 0;
+        State.steerOut = 0;   State.throttleOut = 0;
+    }
+    function exitFailSafe() {
+        if (!failsafeActive) return;
+        failsafeActive = false;
+        document.body.classList.remove('failsafe');
+    }
+
+    setInterval(() => {
+        if (gotFirstMsg && ws && ws.readyState === 1 && Date.now() - lastWsMsgTime > WATCHDOG_MS) {
+            enterFailSafe();
+        }
+        if (rcOnline && Date.now() - lastRcTime > RC_TIMEOUT_MS) {
+            rcOnline = false;
+            rcDot.className = 'status-dot error';
+            rcText.innerText = '遥控断开';
+            if (State.controlMode === 'rc') State.controlMode = 'manual';
+        }
+        if (rcOnline && State.controlMode === 'manual' && pointerMap.size === 0 && throttlePct < 0.001 && Date.now() > rcSuppressUntil) {
+            State.controlMode = 'rc';
+        }
+    }, 500);
+
+    // ============================================================
+    //  UI 事件
+    // ============================================================
+    function applyModeUI(mode) {
+        if (mode < 0 || mode > 2) return;
+        State.driveMode = mode;
+        Object.keys(modeBtns).forEach(k => modeBtns[k].classList.toggle('on', parseInt(k) === mode));
+        dirty = true;
+    }
+    Object.keys(modeBtns).forEach(k => {
+        modeBtns[k].addEventListener('click', () => {
+            applyModeUI(parseInt(k));
+            dirty = true;
+        });
+    });
+
+    btnLamp.addEventListener('click', () => {
+        State.lamp = State.lamp ? 0 : 1;
+        btnLamp.innerText = State.lamp ? '关灯' : '大灯';
+        btnLamp.classList.toggle('on', State.lamp === 1);
+        dirty = true;
+        sendCommand();
+    });
+
+    btnHandbrake.addEventListener('click', () => {
+        State.handbrake = !State.handbrake;
+        btnHandbrake.classList.toggle('on', State.handbrake);
+        document.body.classList.toggle('handbrake-on', State.handbrake);
+        if (State.handbrake) {
+            clearAllSteerPointers();
+            State.steerTarget = 0; State.throttleTarget = 0;
+            State.steerOut = 0;   State.throttleOut = 0;
+            updateThrottleVisual(0);
+            if (gyroState !== 'off') exitGyro();
+        }
+        dirty = true;
+        sendCommand();
+    });
+
+    document.getElementById('btnFullScreen').addEventListener('click', () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+        else document.exitFullscreen();
+    });
+
+    btnGyro.addEventListener('click', toggleGyro);
+
+    // ============================================================
+    //  换挡拖拽
+    // ============================================================
+    let isDragging = false, dragStartY = 0, dragStartTop = 0;
+
+    function updateGearUI(idx) {
+        currentGearIdx = idx;
+        State.gear = gears[idx].name;
+        gearScreen.innerText = State.gear;
+        gearKnob.style.top = `${gears[idx].pct * 100}%`;
+        gearDot.classList.toggle('active', State.gear === 'N');
+
+        if (State.gear === 'N') {
+            throttlePad.classList.add('disabled');
+            updateThrottleVisual(0);
+        } else {
+            throttlePad.classList.remove('disabled');
+        }
+        dirty = true;
+    }
+
+    gearKnob.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        dragStartY = e.clientY;
+        dragStartTop = gearKnob.getBoundingClientRect().top;
+        gearKnob.style.transition = 'none';
+    });
+    window.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const rect = gearKnob.parentElement.getBoundingClientRect();
+        const dy = e.clientY - dragStartY;
+        const newTop = clamp(dragStartTop + dy - rect.top, rect.height * 0.05, rect.height * 0.75);
+        gearKnob.style.top = newTop + 'px';
+    });
+    window.addEventListener('pointerup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        const rect = gearKnob.parentElement.getBoundingClientRect();
+        const pct = parseFloat(gearKnob.style.top) / rect.height;
+        let minDist = 999, idx = 0;
+        gears.forEach((g, i) => {
+            const d = Math.abs(pct - g.pct);
+            if (d < minDist) { minDist = d; idx = i; }
+        });
+        updateGearUI(idx);
+        gearKnob.style.transition = 'top 0.15s cubic-bezier(0.2, 0.8, 0.3, 1)';
+    });
+
+    function updateGyroBall(rollDeg) {
+        const c = clamp(rollDeg, -30, 30);
+        const pct = ((c + 30) / 60) * 100;
+        gyroBall.style.left = pct + '%';
+        if (c > 10) gyroBall.style.background = 'radial-gradient(circle, #fff, #ff1744)';
+        else if (c < -10) gyroBall.style.background = 'radial-gradient(circle, #fff, #4ade80)';
+        else gyroBall.style.background = 'radial-gradient(circle, #fff, #00e5ff)';
+    }
+
+    // ============================================================
+    //  启动
+    // ============================================================
+    setTimeout(() => {
+        updateThrottleVisual(0);
+        updateGearUI(1);
+        applyModeUI(0);
+        updateGyroBall(0);
+        requestAnimationFrame(mainLoop);
+        initWS();
+    }, 100);
+    </script>
+</body>
+</html>
