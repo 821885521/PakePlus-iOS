@@ -1,0 +1,1120 @@
+<html lang="zh-cn" data-trae-theme="light"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智能车辆控制 · 编程画线</title>
+    <style>
+        :root { 
+            --bg: #0b0d12; --panel: #14161c; --dial: #101218; 
+            --text-main: #e0f7fa; --text-sub: #80cbc4; --needle: #00e5ff; 
+            --danger: #ff1744; --gear-glow: #4ade80; --accent: #00e5ff; --ws-green: #00e676;
+            --warn: #ffab00;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: var(--bg); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; touch-action: none; overflow: hidden; }
+        
+        .top-section { flex-shrink: 0; background: var(--panel); padding: 10px 15px; border-bottom: 1px solid #222; border-radius: 0 0 15px 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); z-index: 10; display: flex; flex-direction: column; gap: 8px;}
+
+        .top-btn-group { 
+            display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px;
+        }
+        .top-btn-group::-webkit-scrollbar { display: none; }
+
+        .t-btn { 
+            flex: 0 0 auto; min-width: 58px; padding: 10px 8px; font-size: 12px; font-weight: bold; 
+            background: linear-gradient(to bottom, #333, #1a1a1a); color: #aaa; border: 1px solid #444; 
+            border-radius: 8px; outline: none; box-shadow: 0 4px 6px rgba(0,0,0,0.5); cursor: pointer; transition: 0.1s; white-space: nowrap;
+        }
+        .t-btn:active { box-shadow: inset 0 4px 6px rgba(0,0,0,0.8); background: #111; transform: scale(0.98);}
+        .t-btn.on { color: var(--accent); border-color: var(--accent); text-shadow: 0 0 10px var(--accent); box-shadow: 0 0 15px rgba(0,229,255,0.2); }
+        .t-btn.danger { color: var(--danger); border-color: #441111; }
+        .t-btn.danger.on { color: #fff; background: #661111; border-color: var(--danger); text-shadow: 0 0 10px var(--danger); }
+
+        .top-status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #888; font-family: monospace; padding: 0 5px;}
+        .status-group { display: flex; gap: 12px; }
+        .stat-item { display: flex; align-items: center; gap: 5px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; transition: 0.3s; }
+        .status-dot.ws-connected { background: var(--ws-green); box-shadow: 0 0 8px var(--ws-green); }
+        .status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+        .val-text { color: var(--text-main); font-weight: bold; }
+
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; gap: 10px; min-height: 0; }
+        .dashboard { width: 100%; flex: 1; display: flex; justify-content: center; align-items: center; min-height: 0; }
+        .gauge-wrapper { 
+            position: relative; width: 100%; max-width: min(300px, 65vh); aspect-ratio: 1; 
+            background: radial-gradient(circle, #1a2230 0%, #10141d 68%, #07090d 100%); border-radius: 50%; 
+            box-shadow: inset 0 10px 30px rgba(0,0,0,0.9), 0 10px 25px rgba(0,0,0,0.7), 0 0 30px rgba(0,229,255,0.05); 
+            border: 4px solid #0c0e13; transition: box-shadow 0.3s, border-color 0.3s;
+        }
+        .gauge-wrapper.overload { box-shadow: inset 0 0 30px rgba(255,23,68,0.25), 0 0 30px rgba(255,23,68,0.4); border-color: rgba(255,23,68,0.4); }
+        .gauge-svg { width: 100%; height: 100%; display: block; }
+        
+        .speed-num { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; margin-top: 30px; pointer-events: none; }
+        .speed-val { font-size: 40px; font-weight: 900; font-family: 'Courier New', monospace; color: var(--text-main); line-height: 1; transition: color 0.2s; text-shadow: 0 0 15px rgba(224,247,250,0.25); }
+        .speed-unit { font-size: 12px; color: var(--text-sub); font-weight: bold; margin-top: 2px; letter-spacing: 1px; }
+
+        .gyro-indicator { position: absolute; bottom: 13%; left: 50%; transform: translateX(-50%); width: 62%; height: 8px; background: #111; border-radius: 4px; border: 1px solid #2a2f3a; overflow: visible; pointer-events: none; box-shadow: inset 0 2px 6px #000; }
+        .gyro-indicator .gyro-track { height: 100%; width: 100%; background: linear-gradient(90deg, #4ade80, #ffeb3b, #ff1744); border-radius: 4px; opacity: 0.28; }
+        .gyro-indicator .gyro-ball { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; background: radial-gradient(circle, #fff, #00e5ff); border-radius: 50%; box-shadow: 0 0 15px #00e5ff, 0 0 5px #fff; transition: left 0.08s linear, background 0.2s; border: 1px solid #fff; pointer-events: none; z-index: 2; }
+
+        .control-area { flex-shrink: 0; width: 100%; display: flex; justify-content: space-between; align-items: stretch; padding: 10px 10px; background: var(--panel); border-top: 1px solid #222; border-radius: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); gap: 8px; height: 250px;}
+
+        .left-controls { flex: 0 0 auto; display: flex; align-items: stretch; }
+        .right-controls { flex: 1; min-width: 0; display: flex; align-items: stretch; }
+        
+        .steer-group { display: flex; flex-direction: column; justify-content: center; gap: 12px; height: 100%; flex-shrink: 0;}
+        .steer-btn { flex: 1; width: 56px; background: linear-gradient(180deg, #606060 0%, #1a1a1a 100%); border: 2px solid #4a4a4a; border-radius: 16px; display: flex; justify-content: center; align-items: center; box-shadow: 0 6px 12px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.1); cursor: pointer; transition: transform 0.08s, box-shadow 0.08s, border-color 0.15s; }
+        .steer-btn.active { transform: scale(0.95) translateY(2px); background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%); border-color: var(--gear-glow); box-shadow: 0 0 18px rgba(74,222,128,0.45), inset 0 3px 8px rgba(0,0,0,0.8); }
+        .steer-btn.disabled { opacity: 0.35; pointer-events: none; }
+        .arrow-left { width: 0; height: 0; border-top: 11px solid transparent; border-bottom: 11px solid transparent; border-right: 18px solid #fff; filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); margin-right: 6px; }
+        .arrow-right { width: 0; height: 0; border-top: 11px solid transparent; border-bottom: 11px solid transparent; border-left: 18px solid #fff; filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); margin-left: 6px; }
+
+        .gear-container { position: relative; width: 68px; height: 100%; background: #050505; border-radius: 20px; border: 2px solid #333; box-shadow: inset 0 0 20px rgba(0,0,0,1), 0 5px 15px rgba(0,0,0,0.5); display: flex; justify-content: center; touch-action: none; flex-shrink: 0; }
+        .gear-track { position: absolute; top: 20px; bottom: 20px; width: 28px; background: linear-gradient(180deg, #111, #000, #111); border-radius: 15px; border: 1px solid #222; box-shadow: inset 0 0 15px rgba(0,0,0,1), 0 0 5px rgba(255,255,255,0.05); }
+        .gear-base { position: absolute; bottom: 10px; width: 60px; height: 80px; background: radial-gradient(ellipse at bottom, rgba(74, 222, 128, 0.4) 0%, transparent 70%); border-radius: 20px; pointer-events: none; z-index: 1; }
+        .gear-knob { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); width: 44px; height: 70px; background: linear-gradient(180deg, #2a2a2a 0%, #0a0a0a 100%); border-radius: 12px; border: 2px solid #555; box-shadow: 0 10px 20px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; z-index: 10; cursor: grab; transition: border-color 0.2s, box-shadow 0.2s; }
+        .gear-knob:active { cursor: grabbing; }
+        .gear-knob::before { content: ''; position: absolute; inset: -2px; border-radius: 12px; pointer-events: none; border: 2px solid transparent; border-top-color: var(--gear-glow); border-left-color: var(--gear-glow); border-right-color: var(--gear-glow); opacity: 0.8; box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); transition: 0.3s; }
+        .gear-screen { width: 30px; height: 30px; margin-top: 6px; background: #000; border-radius: 6px; border: 1px solid #333; box-shadow: inset 0 2px 5px rgba(0,0,0,1); display: flex; justify-content: center; align-items: center; font-size: 18px; font-weight: 900; font-family: 'Courier New', monospace; color: #fff; text-shadow: 0 0 10px #fff; transition: 0.2s; }
+        .gear-dot { width: 5px; height: 5px; border-radius: 50%; background: #222; margin-top: 6px; box-shadow: inset 0 1px 2px rgba(0,0,0,1); }
+        .gear-dot.active { background: var(--gear-glow); box-shadow: 0 0 8px var(--gear-glow); }
+
+        .pedal-group { display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: stretch; justify-content: flex-end; }
+        .speed-levels { display: flex; gap: 6px; width: 100%; }
+        .speed-levels .t-btn { flex: 1; min-width: 0; padding: 8px 2px; font-size: 12px; }
+        .throttle-meta { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 2px; font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: 0.5px; color: var(--text-sub); }
+        .throttle-meta b { color: var(--accent); font-size: 12px; text-shadow: 0 0 8px rgba(0,229,255,0.55); }
+        .pedal { flex: 1; width: 100%; background: linear-gradient(160deg, #3c3c3c 0%, #1a1a1a 50%, #0d0d0d 100%); border: 3px solid #4a4a4a; border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,0.8), inset 0 2px 0 rgba(255,255,255,0.15), inset 0 -2px 4px rgba(0,0,0,0.6); cursor: pointer; transition: transform 0.08s, box-shadow 0.08s, border-color 0.15s; position: relative; transform-origin: bottom center; display: flex; justify-content: center; align-items: center; overflow: hidden; touch-action: none; min-height: 56px; }
+        .pedal::before { content: ''; position: absolute; inset: 12px; background: repeating-linear-gradient(0deg, transparent 0 6px, rgba(0,0,0,0.5) 6px 8px); border-radius: 8px; opacity: 0.55; }
+        .pedal::after { content: ''; position: absolute; top: 6px; left: 10%; width: 80%; height: 6px; background: linear-gradient(to bottom, rgba(255,255,255,0.18), transparent); border-radius: 3px; }
+        .pedal.active { transform: perspective(300px) rotateX(18deg) scaleY(0.94); box-shadow: 0 2px 6px rgba(0,0,0,0.8), inset 0 4px 12px rgba(0,0,0,0.9); }
+        .pedal.gas.active { border-color: var(--gear-glow); box-shadow: 0 0 20px rgba(74,222,128,0.45), inset 0 4px 12px rgba(0,0,0,0.9); }
+        .gas-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: linear-gradient(0deg, rgba(74,222,128,0.55) 0%, rgba(0,229,255,0.10) 70%, transparent 100%); transition: height 0.08s linear; pointer-events: none; z-index: 1; }
+        .gas-text { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 3px; color: #cfd8dc; font-size: 14px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 8px rgba(0,0,0,0.9); pointer-events: none; }
+        .gas-text .gas-sub { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #8a9aa0; }
+        .pedal.gas.active .gas-text { color: #eaffea; }
+
+        body.handbrake-on::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 999; border: 4px solid var(--danger); box-shadow: inset 0 0 30px rgba(255,23,68,0.5); animation: hbPulse 0.8s infinite alternate; }
+        @keyframes hbPulse { from { opacity: 0.25; box-shadow: inset 0 0 15px rgba(255,23,68,0.3); } to { opacity: 1; box-shadow: inset 0 0 40px rgba(255,23,68,0.7); } }
+
+        body.failsafe::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 998; border: 4px solid var(--warn); box-shadow: inset 0 0 40px rgba(255,171,0,0.4); animation: fsPulse 0.6s infinite alternate; }
+        body.failsafe::before { content: '信号丢失 · 失控保护'; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--warn); font-size: 18px; font-weight: 900; font-family: monospace; text-shadow: 0 0 20px rgba(255,171,0,0.9); pointer-events: none; z-index: 1000; animation: fsPulse 0.6s infinite alternate; white-space: nowrap; }
+        @keyframes fsPulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+        /* ========== 全屏画板层 ========== */
+        .path-layer { position: fixed; inset: 0; z-index: 2000; background: rgba(2, 6, 10, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; flex-direction: column; padding: 12px 14px 18px; gap: 10px; opacity: 0; pointer-events: none; transform: translateY(20px); transition: opacity 0.25s ease, transform 0.25s ease; }
+        .path-layer.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        .path-layer::before { content: ''; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px); background-size: 36px 36px; }
+        .path-header { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; padding: 6px 4px 2px; position: relative; z-index: 2; }
+        .path-title { font-size: 16px; font-weight: 900; letter-spacing: 2px; color: var(--accent); text-shadow: 0 0 12px rgba(0,229,255,0.7), 0 0 24px rgba(0,229,255,0.3); }
+        .path-hint { font-size: 11px; color: var(--text-sub); font-family: 'Courier New', monospace; letter-spacing: 0.5px; }
+        .path-canvas { flex: 1; width: 100%; min-height: 0; border-radius: 16px; background: rgba(4, 8, 14, 0.6); border: 1px solid rgba(0,229,255,0.25); box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 0 20px rgba(0,229,255,0.08); touch-action: none; cursor: crosshair; position: relative; z-index: 2; }
+        .path-footer { flex-shrink: 0; display: flex; gap: 10px; position: relative; z-index: 2; }
+        .path-footer .t-btn { flex: 1; min-width: 0; }
+        #btnPathExec:disabled { opacity: 0.35; pointer-events: none; }
+
+        #debugBar { position: fixed; left: 8px; right: 8px; bottom: 60px; z-index: 3000; padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,0.85); color: #00e5ff; font-size: 10px; font-family: monospace; border: 1px solid rgba(0,229,255,0.3); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        @media (orientation: landscape) {
+            .top-section { flex-direction: row; align-items: center; padding: 6px 16px; gap: 18px; }
+            .top-btn-group { width: 46%; }
+            .top-status-bar { flex: 1; }
+            .t-btn { padding: 8px 0; font-size: 12px; }
+            /* 横屏：方向盘/档杆/仪表/油门 一字排开并整体居中，避免出现大块空白 */
+            .main-wrapper { flex-direction: row; align-items: stretch; justify-content: center; padding: 10px 24px; gap: 26px; }
+            .control-area { display: contents; }
+            .left-controls { order: 1; flex: 0 0 84px; width: 84px; height: min(100%, 400px); align-self: center; display: flex; flex-direction: row; align-items: stretch; }
+            .steer-group { width: 100%; height: 100%; justify-content: center; gap: 12px; }
+            .steer-btn { width: 100%; flex: 1; }
+            .gear-container { order: 2; flex: 0 0 64px; width: 64px; height: min(100%, 440px); align-self: center; }
+            .dashboard { order: 3; flex: 0 0 auto; width: 440px; max-width: none; height: 100%; }
+            .gauge-wrapper { max-width: min(440px, 56vh); }
+            .right-controls { order: 4; flex: 0 0 200px; width: 200px; height: min(100%, 420px); align-self: center; display: flex; align-items: stretch; }
+            .pedal-group { height: 100%; width: 100%; justify-content: center; gap: 10px; }
+            .pedal { flex: 0 1 300px; max-height: 300px; min-height: 56px; }
+            .gyro-indicator { bottom: 12%; width: 60%; }
+            .speed-num { margin-top: 26px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-section">
+        <div class="top-btn-group">
+            <button class="t-btn" id="btnFullScreen">全域</button>
+            <button class="t-btn" id="btnLamp">耀光</button>
+            <button class="t-btn" id="btnGyro">星控</button>
+            <button class="t-btn on" id="btnModeSport">竞技</button>
+           <button class="t-btn" id="btnModeLow" style="display: none;">低速</button>
+            <button class="t-btn" id="btnPath">航迹</button>
+            <button class="t-btn danger" id="btnHandbrake">锁止</button>
+        </div>
+        <div class="top-status-bar">
+            <div class="status-group">
+                <div class="stat-item"><span class="status-dot" id="wsDot"></span><span id="wsText">小车断连</span></div>
+                <div class="stat-item"><span class="status-dot" id="rcDot"></span><span id="rcText">遥控断开</span></div>
+            </div>
+            <div class="status-group">
+                <div class="stat-item">P: <span class="val-text" id="valPitch">0.0</span>°</div>
+                <div class="stat-item">R: <span class="val-text" id="valRoll">0.0</span>°</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <div class="dashboard">
+            <div class="gauge-wrapper" id="gaugeWrapper">
+                <svg class="gauge-svg" viewBox="0 0 200 200">
+                    <defs>
+                        <linearGradient id="arcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#00e5ff"></stop>
+                            <stop offset="45%" stop-color="#4ade80"></stop>
+                            <stop offset="75%" stop-color="#ffeb3b"></stop>
+                            <stop offset="100%" stop-color="#ff1744"></stop>
+                        </linearGradient>
+                        <linearGradient id="needleGrad" gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="22">
+                            <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.5"></stop>
+                            <stop offset="55%" stop-color="#7df9ff" stop-opacity="0.9"></stop>
+                            <stop offset="100%" stop-color="#ffffff"></stop>
+                        </linearGradient>
+                        <radialGradient id="hubGrad">
+                            <stop offset="0%" stop-color="#ffffff"></stop>
+                            <stop offset="45%" stop-color="#7df9ff"></stop>
+                            <stop offset="100%" stop-color="#00b8d4"></stop>
+                        </radialGradient>
+                        <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+                            <feGaussianBlur stdDeviation="2" result="b"></feGaussianBlur>
+                            <feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+                        </filter>
+                    </defs>
+
+                    <circle cx="100" cy="100" r="90" fill="none" stroke="#0c0e13" stroke-width="10"></circle>
+                    <circle id="speedArc" cx="100" cy="100" r="90" fill="none" stroke="url(#arcGrad)" stroke-width="6" stroke-linecap="round" stroke-dasharray="0.0 424.1" transform="rotate(135 100 100)" filter="url(#glow)" opacity="0.95"></circle>
+                    <g id="ticks"></g>
+                    <g id="numbers"></g>
+                    <g id="needleGroup" style="transition: transform 0.1s linear;" transform="rotate(-135 100 100)">
+                        <path d="M100,22 L102,92 L100,100 L98,92 Z" fill="url(#needleGrad)" filter="url(#glow)"></path>
+                        <circle cx="100" cy="24" r="2.2" fill="#ffffff"></circle>
+                    </g>
+                    <circle cx="100" cy="100" r="15" fill="#0b0d10" stroke="#2a2f3a" stroke-width="2"></circle>
+                    <circle cx="100" cy="100" r="6" fill="url(#hubGrad)" filter="url(#glow)"></circle>
+                </svg>
+                <div class="speed-num">
+                    <div class="speed-val" id="valSpeed" style="color: var(--text-main);">0</div>
+                    <div class="speed-unit">公里/小时</div>
+                </div>
+                <div class="gyro-indicator" id="gyroIndicator">
+                    <div class="gyro-track"></div>
+                    <div class="gyro-ball" id="gyroBall" style="left: 50%; background: radial-gradient(circle, rgb(255, 255, 255), rgb(0, 229, 255));"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-area">
+            <div class="left-controls">
+                <div class="steer-group">
+                    <div class="steer-btn" id="btnLeft"><div class="arrow-left"></div></div>
+                    <div class="steer-btn" id="btnRight"><div class="arrow-right"></div></div>
+                </div>
+            </div>
+            <div class="gear-container" id="gearPad">
+                <div class="gear-base"></div>
+                <div class="gear-track"></div>
+                <div class="gear-knob" id="gearKnob" style="top: 40%;">
+                    <div class="gear-screen" id="gearScreen">N</div>
+                    <div class="gear-dot active" id="gearDot"></div>
+                </div>
+            </div>
+            <div class="right-controls">
+                <div class="pedal-group">
+                    <div class="speed-levels">
+                        <button class="t-btn" data-level="0">平顺</button>
+                        <button class="t-btn on" data-level="1">提速</button>
+                        <button class="t-btn" data-level="2">竞技</button>
+                    </div>
+                    <div class="throttle-meta">
+                        <span>开度 <b id="valOpen">0%</b></span>
+                        <span>c1 <b id="valC1">512</b></span>
+                    </div>
+                    <div class="pedal gas" id="pedalGas">
+                        <div class="gas-fill" id="gasFill" style="height: 0%;"></div>
+                        <div class="gas-text"><span class="gas-sub"></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 全屏画板层 ========== -->
+    <div class="path-layer" id="pathLayer">
+        <div class="path-header">
+            <span class="path-title">编程画线</span>
+            <span class="path-hint" id="pathHint">按住画线，松手后可执行 · 按目标速度行驶，终点自动收油停车</span>
+        </div>
+        <canvas class="path-canvas" id="pathCanvas"></canvas>
+        <div class="path-footer">
+            <button class="t-btn" id="btnPathClear">清除</button>
+            <button class="t-btn" id="btnPathLoop">循环</button>
+            <button class="t-btn on" id="btnPathExec" disabled="">执行</button>
+            <button class="t-btn danger" id="btnPathClose">关闭</button>
+        </div>
+    </div>
+    <div id="debugBar" style="display:none;"></div>
+
+    <script>
+    const MODE_CFG = [ { speedMax: 150 }, { speedMax: 40 } ]; 
+    const SEND_INTERVAL = 20; const WS_RECON_MIN = 2000; const WS_RECON_MAX = 15000;
+    const WATCHDOG_MS = 5000; const RC_TIMEOUT_MS = 2000; const GYRO_DEADZONE = 4;
+    const GYRO_MAX_TILT = 25; const GYRO_CALIB_N = 20;
+
+    /* ============ 转向幅度集中调节（改这里即可）============ */
+    const STEER_GAIN        = 2.6;    // 转向总增益：曲率→舵量的倍率，1.0=原版；画线转弯舵角加大
+    const STEER_MAX         = 240;    // 舵量限幅（相对中位 512 的 ± 值）：c2 落在 272~752，转弯打舵更明显
+    const STEER_BASE_COEF   = 110;    // 曲率→舵量基础系数（原版映射，一般不用改）
+    const STEER_SLEW        = 1200;   // 转向斜率限制（舵量单位/秒）：限制每帧舵量变化，防突变与过冲
+    const STEER_LOOKAHEAD   = 45;     // 前瞻距离(px)：看前方多远计算弯道曲率
+    const STEER_VISUAL_DEG  = 30;     // 画布上前轮/车头指示的最大视觉偏转角(度)，仅影响视觉
+    /* ======================================================= */
+
+    /* ============ 油门集中调节（改这里即可）============ */
+    const THROTTLE_MAX_OFFSET  = 260;               // 满档油门偏置：c1 = 512 ± 260（252~772），仍在 c1 0~1023 协议范围内
+    const THROTTLE_LEVEL_RATIO = [0.70, 0.80, 1.0]; // 低/中/高三档对应的满偏比例：中档 0.70×260≈182 → c1≈694
+    const THROTTLE_LEVEL_DEF   = 1;                 // 默认档位：中档（下标 1）
+    const THROTTLE_UP_SLEW     = 120;               // （已弃用，保留定义不影响运行）原上升斜率
+    const THROTTLE_DOWN_SLEW   = 70;                // （已弃用，保留定义不影响运行）原回落斜率
+    const THROTTLE_OFF_MARGIN  = 14;                // 手指滑出按钮的判定余量(px)，超出即视为松开
+    /* ================================================== */
+
+    /* ============ 画线行驶速度曲线（受控收油）============ */
+    const PATH_V_MAX      = 180;   // 巡航目标速度基准(px/s)，画线整体降速
+    const PATH_ACC        = 200;   // 加速度上限(px/s²)：起步/加速斜坡更缓
+    const PATH_DEC        = 200;   // 减速度上限(px/s²)：收油/终点减速
+    const CURVE_SLOW_K    = 1;   // 弯道降速强度：前瞻转角越大，目标速度越低
+    const CURVE_MIN_RATIO = 0.7;  // 弯道最低速度比例，弯中更慢
+    const CURVE_REF_RAD   = 0.9;  // 前瞻转角参考值(rad)：达到该转角即降到最低比例
+    const PATH_STOP_V     = 15;    // 到点停车速度阈值(px/s)：低于该值才发 c1:512
+    const PATH_SHORT_LEN  = 150;   // 短线保护弧长(px)：更短的线按比例限制速度上限，避免冲过终点
+    const PATH_COAST_MS   = 300;   // 中止/重画时的收油时长(ms)：斜坡收油后再归零，不做硬切
+    /* =================================================== */
+
+    const State = {
+        controlMode: 'manual', gear: 'N', handbrake: false, lamp: 0, driveMode: 0,
+        steerTarget: 0, steerOut: 0, throttleTarget: 0, throttleOut: 0, throttleLevel: THROTTLE_LEVEL_DEF,
+        speedTarget: 0, displaySpeed: 0,
+        pathActive: false, pathSeq: [], pathStartTime: 0, restoreMode: 0
+    };
+
+    const pointerMap = new Map();
+    let rcOnline = false; let rcC1 = 512; let lastRcTime = 0; let rcSuppressUntil = 0;
+    let gyroState = 'off'; let gyroSamples = []; let gyroZero = { beta: 0, gamma: 0 }; let gyroRaw  = { beta: 0, gamma: 0 };
+    let ws = null; let reconnectDelay = WS_RECON_MIN; let lastWsMsgTime = 0; let gotFirstMsg = false;
+    let lastSendTime = 0; let dirty = true;
+    let lastC1 = 512;                                   // 最近一次实际下发的 c1，用于中止时斜坡收油
+    let coastActive = false, coastStart = 0, coastFromOffset = 0, coastDir = 1;
+    let lastFrameTime = performance.now(); let lastShown = -1; let overloadActive = false; let failsafeActive = false;
+
+    const valSpeed = document.getElementById('valSpeed'); const gyroBall = document.getElementById('gyroBall');
+    const gaugeWrapper = document.getElementById('gaugeWrapper'); const needleGroup = document.getElementById('needleGroup');
+    const ticksGroup = document.getElementById('ticks'); const numbersGroup = document.getElementById('numbers');
+    const speedArc = document.getElementById('speedArc'); const btnLeft = document.getElementById('btnLeft');
+    const btnRight = document.getElementById('btnRight'); const pedalGas = document.getElementById('pedalGas');
+    const gasFill = document.getElementById('gasFill'); const valOpen = document.getElementById('valOpen');
+    const valC1 = document.getElementById('valC1');
+    const throttleLevelBtns = Array.from(document.querySelectorAll('.speed-levels .t-btn'));
+    const gearKnob = document.getElementById('gearKnob');
+    const gearScreen = document.getElementById('gearScreen'); const gearDot = document.getElementById('gearDot');
+    const btnGyro = document.getElementById('btnGyro'); const btnHandbrake = document.getElementById('btnHandbrake');
+    const btnLamp = document.getElementById('btnLamp'); const wsDot = document.getElementById('wsDot');
+    const wsText = document.getElementById('wsText'); const rcDot = document.getElementById('rcDot');
+    const rcText = document.getElementById('rcText'); const valPitch = document.getElementById('valPitch');
+    const valRoll = document.getElementById('valRoll');
+
+    const ARC_FULL = 2 * Math.PI * 90 * (270 / 360);
+    const gears = [ { name: 'D', pct: 0.08 }, { name: 'N', pct: 0.4 }, { name: 'R', pct: 0.72 } ];
+    let currentGearIdx = 1;
+    const modeBtns = { 0: document.getElementById('btnModeSport'), 2: document.getElementById('btnModeLow') };
+
+    for (let i = 0; i <= 150; i += 5) {
+        const angle = -135 + (i / 150) * 270; const isMajor = i % 10 === 0;
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', '100'); tick.setAttribute('y1', isMajor ? '10' : '12');
+        tick.setAttribute('x2', '100'); tick.setAttribute('y2', '20');
+        tick.setAttribute('stroke', isMajor ? 'rgba(224,247,250,0.85)' : 'rgba(128,203,196,0.45)');
+        tick.setAttribute('stroke-width', isMajor ? '2.5' : '1.2'); tick.setAttribute('transform', `rotate(${angle} 100 100)`);
+        ticksGroup.appendChild(tick);
+        if (isMajor) {
+            const rad = (angle - 90) * Math.PI / 180; const r = 70;
+            const cx = 100 + r * Math.cos(rad); const cy = 100 + r * Math.sin(rad);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', cx); text.setAttribute('y', cy); text.setAttribute('fill', 'rgba(224,247,250,0.85)');
+            text.setAttribute('font-size', i >= 100 ? '10' : '12'); text.setAttribute('font-weight', 'bold');
+            text.setAttribute('font-family', "'Courier New', monospace"); text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central'); text.setAttribute('transform', `rotate(${angle} ${cx} ${cy})`);
+            text.textContent = i; numbersGroup.appendChild(text);
+        }
+    }
+
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    function expSmooth(cur, target, rate, dt) { return cur + (target - cur) * (1 - Math.exp(-rate * dt)); }
+    function debugLog(msg) { const el = document.getElementById('debugBar'); if (el) { el.style.display = 'block'; el.textContent = msg; } }
+
+    function setPointer(id, action) {
+        if (State.handbrake) return;
+        if (State.pathActive) cancelPath();
+        if (State.controlMode === 'rc') { State.controlMode = 'manual'; rcSuppressUntil = Date.now() + RC_TIMEOUT_MS; }
+        pointerMap.set(id, action); updateButtonUI(); dirty = true;
+    }
+    function clearPointer(id) { if (pointerMap.has(id)) { pointerMap.delete(id); updateButtonUI(); dirty = true; } }
+    function clearAllPointers() { if (pointerMap.size > 0) { pointerMap.clear(); updateButtonUI(); dirty = true; } }
+    function updateButtonUI() {
+        const acts = new Set(pointerMap.values());
+        btnLeft.classList.toggle('active', acts.has('left')); btnRight.classList.toggle('active', acts.has('right'));
+        pedalGas.classList.toggle('active', acts.has('gas'));
+    }
+    function bindHold(el, action) { el.addEventListener('pointerdown', (e) => { e.preventDefault(); setPointer(e.pointerId, action); }); }
+    bindHold(btnLeft, 'left'); bindHold(btnRight, 'right'); bindHold(pedalGas, 'gas');
+
+    // 按住油门后手指滑出按钮：立即松油，避免卡在满油（pointercancel/pointerleave 的兜底）
+    window.addEventListener('pointermove', (e) => {
+        if (pointerMap.get(e.pointerId) !== 'gas') return;
+        const r = pedalGas.getBoundingClientRect();
+        const m = THROTTLE_OFF_MARGIN;
+        if (e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m) clearPointer(e.pointerId);
+    });
+    pedalGas.addEventListener('lostpointercapture', (e) => { if (pointerMap.get(e.pointerId) === 'gas') clearPointer(e.pointerId); });
+
+    // 低/中/高三档：只改目标开度，不改变协议字段
+    let lastOpenPct = -1, lastC1Shown = -1;
+    function setThrottleLevel(idx) {
+        const i = clamp(Number.isFinite(idx) ? Math.round(idx) : THROTTLE_LEVEL_DEF, 0, THROTTLE_LEVEL_RATIO.length - 1);
+        State.throttleLevel = i;
+        throttleLevelBtns.forEach((b, k) => b.classList.toggle('on', k === i));
+        try { localStorage.setItem('rcThrottleLevel', String(i)); } catch (err) {}
+        dirty = true; renderThrottleUI();
+    }
+    throttleLevelBtns.forEach((b) => b.addEventListener('click', () => setThrottleLevel(parseInt(b.dataset.level))));
+    (function initThrottleLevel() {
+        let saved = NaN;
+        try { saved = parseInt(localStorage.getItem('rcThrottleLevel')); } catch (err) {}
+        setThrottleLevel(isNaN(saved) ? THROTTLE_LEVEL_DEF : saved);
+    })();
+
+    // 开度/实际 c1 指示：手动、画线、遥控、手刹都统一显示当前真实 c1
+    function renderThrottleUI() {
+        let c1;
+        if (State.handbrake) c1 = 512;
+        else if (State.pathActive) c1 = pathC1();
+        else if (State.controlMode === 'rc' && rcOnline) c1 = rcC1;
+        else c1 = computeC1();
+        if (c1 !== lastC1Shown) { valC1.innerText = c1; lastC1Shown = c1; }
+        const open = Math.round(clamp(Math.abs(c1 - 512) / THROTTLE_MAX_OFFSET, 0, 1) * 100);
+        if (open !== lastOpenPct) { valOpen.innerText = open + '%'; gasFill.style.height = open + '%'; lastOpenPct = open; }
+    }
+
+    window.addEventListener('pointerup', (e) => clearPointer(e.pointerId));
+    window.addEventListener('pointercancel', (e) => clearPointer(e.pointerId));
+    window.addEventListener('blur', clearAllPointers);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (State.pathActive) cancelPath(true);      // 切后台：立即 512 兜底，不做滑行
+            clearAllPointers(); State.throttleTarget = 0; State.steerTarget = 0; State.throttleOut = 0; State.steerOut = 0;
+            if (ws && ws.readyState === 1) ws.send(`c1:512,c2:512,c3:${State.lamp},mode:${State.driveMode},hb:${State.handbrake ? 1 : 0}`);
+        }
+    });
+
+    function getScreenAngle() {
+        if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+        if (typeof window.orientation === 'number') return window.orientation;
+        return 0;
+    }
+    function getTilt() {
+        const angle = getScreenAngle(); let raw;
+        if (angle === 90) raw = -(gyroRaw.beta - gyroZero.beta);
+        else if (angle === 270 || angle === -90) raw = (gyroRaw.beta - gyroZero.beta);
+        else raw = (gyroRaw.gamma - gyroZero.gamma);
+        return raw;
+    }
+    function onOrientation(e) {
+        const beta = e.beta || 0; const gamma = e.gamma || 0;
+        if (gyroState === 'calibrating') {
+            gyroSamples.push({ beta, gamma });
+            if (gyroSamples.length >= GYRO_CALIB_N) {
+                let sb = 0, sg = 0; for (const s of gyroSamples) { sb += s.beta; sg += s.gamma; }
+                gyroZero.beta = sb / gyroSamples.length; gyroZero.gamma = sg / gyroSamples.length;
+                gyroSamples = []; gyroState = 'active'; btnGyro.classList.remove('calibrating'); btnGyro.innerText = '灵动';
+            } return;
+        }
+        gyroRaw.beta = beta; gyroRaw.gamma = gamma;
+    }
+    async function toggleGyro() {
+        if (gyroState !== 'off') { exitGyro(); return; }
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try { const state = await DeviceOrientationEvent.requestPermission(); if (state !== 'granted') return; } catch (err) { return; }
+        }
+        enterGyro();
+    }
+    function enterGyro() {
+        if (State.pathActive) cancelPath();
+        gyroState = 'calibrating'; gyroSamples = []; gyroRaw.beta = 0; gyroRaw.gamma = 0; gyroZero.beta = 0; gyroZero.gamma = 0;
+        State.controlMode = 'gyro'; State.steerTarget = 0;
+        btnGyro.classList.add('on', 'calibrating'); btnGyro.innerText = '校准中';
+        btnLeft.classList.add('disabled'); btnRight.classList.add('disabled');
+        window.addEventListener('deviceorientation', onOrientation); dirty = true;
+    }
+    function exitGyro() {
+        gyroState = 'off'; window.removeEventListener('deviceorientation', onOrientation);
+        btnGyro.classList.remove('on', 'calibrating'); btnGyro.innerText = '灵动';
+        btnLeft.classList.remove('disabled'); btnRight.classList.remove('disabled');
+        if (State.controlMode === 'gyro') State.controlMode = 'manual'; State.steerTarget = 0; dirty = true;
+    }
+
+    function computeInputTargets() {
+        if (State.handbrake) { State.steerTarget = 0; State.throttleTarget = 0; return; }
+        if (State.pathActive) return;
+        if (State.controlMode === 'rc') return;
+        const acts = new Set(pointerMap.values());
+        if (State.controlMode === 'gyro') {
+            if (gyroState === 'active') { const tilt = getTilt(); State.steerTarget = Math.abs(tilt) > GYRO_DEADZONE ? clamp(tilt / GYRO_MAX_TILT, -1, 1) : 0; }
+            else { State.steerTarget = 0; }
+        } else {
+            if (acts.has('left')) State.steerTarget = -1; else if (acts.has('right')) State.steerTarget = 1; else State.steerTarget = 0;
+        }
+        if (State.gear === 'N') { State.throttleTarget = 0; }
+        else if (acts.has('gas')) { State.throttleTarget = THROTTLE_LEVEL_RATIO[State.throttleLevel]; }
+        else { State.throttleTarget = 0; }
+    }
+    function smoothOutputs(dt) {
+        // 油门：无斜坡，瞬时跟随目标 → 按下立刻给油，松手立刻归零
+        State.throttleOut = State.throttleTarget;
+        let sRate = Math.abs(State.steerTarget) > Math.abs(State.steerOut) ? 12 : 18;
+        if (State.controlMode === 'gyro') sRate = 15;
+        State.steerOut = expSmooth(State.steerOut, State.steerTarget, sRate, dt);
+        if (Math.abs(State.steerOut) < 0.005) State.steerOut = 0;
+    }
+    function computeC1() {
+        if (State.gear === 'N') return 512;
+        const off = Math.round(clamp(State.throttleOut, 0, 1) * THROTTLE_MAX_OFFSET);
+        if (State.gear === 'D') return 512 + off;
+        return 512 - off;
+    }
+    function computeSpeedTarget() {
+        let c1;
+        if (State.controlMode === 'rc' && rcOnline) c1 = rcC1;
+        else if (State.pathActive) c1 = pathC1();
+        else c1 = computeC1();
+        const max = State.driveMode === 0 ? 150 : 40; 
+        return Math.abs(c1 - 512) / 512 * max;
+    }
+    function shouldSendLocally() {
+        if (State.handbrake) return true; if (State.pathActive) return false;
+        if (State.controlMode === 'gyro') return true; if (pointerMap.size > 0) return true;
+        if (State.controlMode === 'rc' && rcOnline) return false; return true;
+    }
+    function sendCommand() {
+        if (!ws || ws.readyState !== 1) return;
+        if (State.handbrake) { ws.send(`c1:512,c2:512,c3:${State.lamp},mode:${State.driveMode},hb:1`); lastC1 = 512; debugLog(`MANUAL HB c1:512 c2:512`); return; }
+        const c1 = computeC1(); const c2 = Math.round(512 + State.steerOut * 512);
+        ws.send(`c1:${c1},c2:${c2},c3:${State.lamp},mode:${State.driveMode},hb:0`);
+        lastC1 = c1;
+      
+    }
+    // 中止画线：从当前 c1 按 PATH_COAST_MS 斜坡收油到 512，不做硬切
+    function startCoast() {
+        const off = Math.abs(lastC1 - 512);
+        if (off < 4) { coastActive = false; return; }
+        coastActive = true; coastStart = performance.now();
+        coastFromOffset = off; coastDir = lastC1 >= 512 ? 1 : -1;
+    }
+    function coastSend(now) {
+        if (!coastActive) return false;
+        if (!ws || ws.readyState !== 1) { coastActive = false; return false; }
+        if (now - lastSendTime < SEND_INTERVAL) return true;
+        const k = clamp((now - coastStart) / PATH_COAST_MS, 0, 1);
+        const off = Math.round(coastFromOffset * (1 - k));
+        const c1 = coastDir > 0 ? 512 + off : 512 - off;
+        ws.send(`c1:${c1},c2:512,c3:${State.lamp},mode:${State.driveMode},hb:0`);
+        lastC1 = c1; lastSendTime = now;
+        if (k >= 1) { coastActive = false; debugLog('COAST DONE c1:512'); }
+        return true;
+    }
+    function maybeSend(now) {
+        if (State.handbrake) coastActive = false;
+        if (pathOverrideSend(now)) return;
+        if (coastSend(now)) return;
+        if (!ws || ws.readyState !== 1) return;
+        if (now - lastSendTime < SEND_INTERVAL) return;
+        if (!shouldSendLocally()) { lastSendTime = now; return; }
+        const active = pointerMap.size > 0 || Math.abs(State.throttleOut) > 0.001 || Math.abs(State.steerOut) > 0.001 || State.handbrake || State.controlMode === 'gyro' || dirty;
+        if (!active) return;
+        sendCommand(); lastSendTime = now; dirty = false;
+    }
+    function renderGauge() {
+        const shown = Math.round(State.displaySpeed);
+        if (shown !== lastShown) { valSpeed.innerText = shown; lastShown = shown; valSpeed.style.color = shown > 120 ? 'var(--danger)' : 'var(--text-main)'; }
+        const ratio = clamp(State.displaySpeed / 150, 0, 1);
+        needleGroup.setAttribute('transform', `rotate(${-135 + ratio * 270} 100 100)`);
+        speedArc.setAttribute('stroke-dasharray', `${(ratio * ARC_FULL).toFixed(1)} ${ARC_FULL.toFixed(1)}`);
+        const overload = State.displaySpeed > 120;
+        if (overload !== overloadActive) { overloadActive = overload; gaugeWrapper.classList.toggle('overload', overload); }
+    }
+    function mainLoop(now) {
+        const dt = Math.min(0.05, (now - lastFrameTime) / 1000); lastFrameTime = now;
+        computeInputTargets(); smoothOutputs(dt);
+        State.speedTarget = computeSpeedTarget();
+        State.displaySpeed = expSmooth(State.displaySpeed, State.speedTarget, 10, dt);
+        if (Math.abs(State.displaySpeed - State.speedTarget) < 0.1) State.displaySpeed = State.speedTarget;
+        updatePathMotion(dt); renderPathFrame();
+        maybeSend(now); renderGauge(); renderThrottleUI(); requestAnimationFrame(mainLoop);
+    }
+
+    function initWS() {
+        try { ws = new WebSocket('ws://192.168.4.1:81/'); } catch (e) { setTimeout(initWS, reconnectDelay); reconnectDelay = Math.min(WS_RECON_MAX, reconnectDelay * 1.5); return; }
+        ws.onopen = () => { wsDot.className = 'status-dot ws-connected'; wsText.innerText = '小车在线'; reconnectDelay = WS_RECON_MIN; gotFirstMsg = false; lastWsMsgTime = Date.now(); exitFailSafe(); dirty = true; };
+        ws.onclose = () => { wsDot.className = 'status-dot error'; wsText.innerText = '断开连接'; enterFailSafe(); setTimeout(initWS, reconnectDelay); reconnectDelay = Math.min(WS_RECON_MAX, reconnectDelay * 1.5); };
+        ws.onerror = () => {};
+        ws.onmessage = (event) => {
+            lastWsMsgTime = Date.now(); gotFirstMsg = true;
+            const data = event.data.split(','); if (data.length < 8) return;
+            const p = parseFloat(data[0]); const r = parseFloat(data[1]); const sig = data[3]; const c1 = parseInt(data[5]); const srvMode = parseInt(data[6]); const srvHb = parseInt(data[7]);
+            if (!isNaN(p)) valPitch.innerText = p.toFixed(1);
+            if (!isNaN(r)) { valRoll.innerText = r.toFixed(1); updateGyroBall(r); }
+            if (sig === '1') {
+                lastRcTime = Date.now();
+                if (!rcOnline) { rcOnline = true; rcDot.className = 'status-dot ws-connected'; rcText.innerText = '遥控在线'; }
+                if (!isNaN(c1)) rcC1 = c1;
+            }
+            if (!isNaN(srvMode) && srvMode !== State.driveMode) applyModeUI(srvMode);
+            if (!isNaN(srvHb)) {
+                const hb = srvHb === 1;
+                if (hb !== State.handbrake) {
+                    State.handbrake = hb; btnHandbrake.classList.toggle('on', hb); document.body.classList.toggle('handbrake-on', hb);
+                    if (hb) { clearAllPointers(); if (gyroState !== 'off') exitGyro(); if (State.pathActive) cancelPath(true); }
+                }
+            }
+        };
+    }
+    function enterFailSafe() {
+        if (failsafeActive) return; failsafeActive = true; document.body.classList.add('failsafe');
+        if (State.pathActive) cancelPath(true); clearAllPointers(); if (gyroState !== 'off') exitGyro();
+        State.controlMode = 'manual'; State.steerTarget = 0; State.throttleTarget = 0; State.steerOut = 0; State.throttleOut = 0;
+    }
+    function exitFailSafe() { if (!failsafeActive) return; failsafeActive = false; document.body.classList.remove('failsafe'); }
+
+    setInterval(() => {
+        if (gotFirstMsg && ws && ws.readyState === 1 && Date.now() - lastWsMsgTime > WATCHDOG_MS) enterFailSafe();
+        if (rcOnline && Date.now() - lastRcTime > RC_TIMEOUT_MS) { rcOnline = false; rcDot.className = 'status-dot error'; rcText.innerText = '遥控断开'; if (State.controlMode === 'rc') State.controlMode = 'manual'; }
+        if (rcOnline && State.controlMode === 'manual' && pointerMap.size === 0 && Date.now() > rcSuppressUntil && !State.pathActive) State.controlMode = 'rc';
+    }, 500);
+
+    function applyModeUI(mode) {
+        if (mode !== 0 && mode !== 2) return; State.driveMode = mode;
+        Object.keys(modeBtns).forEach(k => modeBtns[k].classList.toggle('on', parseInt(k) === mode)); dirty = true;
+    }
+    Object.keys(modeBtns).forEach(k => { modeBtns[k].addEventListener('click', () => { applyModeUI(parseInt(k)); dirty = true; }); });
+
+    btnLamp.addEventListener('click', () => { State.lamp = State.lamp ? 0 : 1; btnLamp.innerText = State.lamp ? '耀光关' : '耀光开'; btnLamp.classList.toggle('on', State.lamp === 1); dirty = true; sendCommand(); });
+    btnHandbrake.addEventListener('click', () => {
+        State.handbrake = !State.handbrake; btnHandbrake.classList.toggle('on', State.handbrake); document.body.classList.toggle('handbrake-on', State.handbrake);
+        if (State.handbrake) { if (State.pathActive) cancelPath(true); clearAllPointers(); State.steerTarget = 0; State.throttleTarget = 0; State.steerOut = 0; State.throttleOut = 0; if (gyroState !== 'off') exitGyro(); }
+        dirty = true; sendCommand();
+    });
+    document.getElementById('btnFullScreen').addEventListener('click', () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen();
+    });
+    btnGyro.addEventListener('click', toggleGyro);
+
+    let isDragging = false, dragStartY = 0, dragStartTop = 0;
+    function updateGearUI(idx) {
+        if (State.pathActive) cancelPath();
+        currentGearIdx = idx; State.gear = gears[idx].name; gearScreen.innerText = State.gear;
+        gearKnob.style.top = `${gears[idx].pct * 100}%`; gearDot.classList.toggle('active', State.gear === 'N');
+        State.throttleTarget = 0; State.throttleOut = 0; dirty = true;
+    }
+    gearKnob.addEventListener('pointerdown', (e) => { e.preventDefault(); isDragging = true; dragStartY = e.clientY; dragStartTop = gearKnob.getBoundingClientRect().top; gearKnob.style.transition = 'none'; });
+    window.addEventListener('pointermove', (e) => {
+        if (!isDragging) return; e.preventDefault(); const rect = gearKnob.parentElement.getBoundingClientRect();
+        const dy = e.clientY - dragStartY; const newTop = clamp(dragStartTop + dy - rect.top, rect.height * 0.05, rect.height * 0.75);
+        gearKnob.style.top = newTop + 'px';
+    });
+    window.addEventListener('pointerup', () => {
+        if (!isDragging) return; isDragging = false; const rect = gearKnob.parentElement.getBoundingClientRect();
+        const pct = parseFloat(gearKnob.style.top) / rect.height; let minDist = 999, idx = 0;
+        gears.forEach((g, i) => { const d = Math.abs(pct - g.pct); if (d < minDist) { minDist = d; idx = i; } });
+        updateGearUI(idx); gearKnob.style.transition = 'top 0.15s cubic-bezier(0.2, 0.8, 0.3, 1)';
+    });
+
+    function updateGyroBall(rollDeg) {
+        const c = clamp(rollDeg, -30, 30); const pct = ((c + 30) / 60) * 100;
+        gyroBall.style.left = pct + '%';
+        if (c > 10) gyroBall.style.background = 'radial-gradient(circle, #fff, #ff1744)';
+        else if (c < -10) gyroBall.style.background = 'radial-gradient(circle, #fff, #4ade80)';
+        else gyroBall.style.background = 'radial-gradient(circle, #fff, #00e5ff)';
+    }
+
+    // ============================================================
+    //  编程画线 · 弧长参数化路径跟随
+    // ============================================================
+    const PATH_MIN_DIST  = 2.5;     // 采样最小间距：过滤抖动点，避免点数爆炸
+    const PATH_MAX_PTS   = 5000;    // 采样硬上限
+    const PATH_TOL       = 1.6;     // RDP 抽稀阈值(px)
+    const PATH_MAX_STEP  = 26;      // 单帧最大前进距离(px)，异常兜底
+    const PATH_GRID      = 36;
+    const CAR_L = 26, CAR_W = 15;
+
+    const pathLayer   = document.getElementById('pathLayer');
+    const pathCanvas  = document.getElementById('pathCanvas');
+    const btnPath     = document.getElementById('btnPath');
+    const btnPathClear= document.getElementById('btnPathClear');
+    const btnPathExec = document.getElementById('btnPathExec');
+    const btnPathClose= document.getElementById('btnPathClose');
+    const btnPathLoop = document.getElementById('btnPathLoop');
+    const pathHint    = document.getElementById('pathHint');
+
+    let pathCtx = null, pathCssW = 0, pathCssH = 0, pathDpr = 1;
+    let baseCanvas = null, baseCtx = null, trailCanvas = null, trailCtx = null;
+    let rawPts = [], isDrawing = false, hasLine = false, activePointerId = -1;
+    let pathData = null;   // { xs, ys, cum, n, total } 前缀和弧长表
+    let trip = { s: 0, idx: 0, ang: 0, steer: 0, v: 0, trailIdx: 0, trailS: 0, done: false };
+    let loopMode = false;
+    let pathNeedsRender = true;
+
+    function normAngle(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+
+    // 迭代式 RDP 抽稀：显式栈 + 步数上限，不受递归深度/异常数据影响
+    function simplifyPath(points, tol) {
+        const n = points.length;
+        if (n < 3) return points.slice();
+        const keep = new Uint8Array(n); keep[0] = 1; keep[n - 1] = 1;
+        const stack = [[0, n - 1]]; let guard = 0;
+        while (stack.length > 0 && guard++ < 40000) {
+            const range = stack.pop(); const a = range[0], b = range[1];
+            if (b - a < 2) continue;
+            const ax = points[a].x, ay = points[a].y;
+            const dx = points[b].x - ax, dy = points[b].y - ay;
+            const len2 = dx * dx + dy * dy;
+            let maxD = -1, maxI = -1;
+            for (let i = a + 1; i < b; i++) {
+                const p = points[i]; let d;
+                if (len2 < 1e-9) d = Math.hypot(p.x - ax, p.y - ay);
+                else {
+                    let t = ((p.x - ax) * dx + (p.y - ay) * dy) / len2;
+                    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+                    d = Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy));
+                }
+                if (d > maxD) { maxD = d; maxI = i; }
+            }
+            if (maxD > tol && maxI > a && maxI < b) { keep[maxI] = 1; stack.push([a, maxI], [maxI, b]); }
+        }
+        const out = [];
+        for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i]);
+        return out;
+    }
+
+    // 构建弧长表：合并重复点/零长度段，只做一次 O(N) 预处理
+    function buildPath(points) {
+        if (!points || points.length < 2) return null;
+        const xs = [], ys = [], cum = [0];
+        xs.push(points[0].x); ys.push(points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            const x = points[i].x, y = points[i].y;
+            const dx = x - xs[xs.length - 1], dy = y - ys[ys.length - 1];
+            const d = Math.hypot(dx, dy);
+            if (!isFinite(d) || d < 0.6) continue;      // 重复点、极小抖动直接跳过
+            xs.push(x); ys.push(y); cum.push(cum[cum.length - 1] + d);
+        }
+        if (xs.length < 2) return null;
+        const total = cum[cum.length - 1];
+        if (!isFinite(total) || total < 2) return null; // 单点/极短线，无有效路径
+        return { xs, ys, cum, n: xs.length, total };
+    }
+
+    // 按弧长取位姿：二分定位线段，再受上界约束地向前微调，绝不无限循环
+    function poseAt(s) {
+        const p = pathData;
+        if (!p) return null;
+        if (s < 0) s = 0; else if (s > p.total) s = p.total;
+        let lo = 0, hi = p.n - 1;
+        while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (p.cum[mid] <= s) lo = mid; else hi = mid; }
+        while (lo < p.n - 2 && p.cum[lo + 1] <= s) lo++;
+        const segLen = p.cum[lo + 1] - p.cum[lo];
+        const t = segLen > 1e-6 ? (s - p.cum[lo]) / segLen : 0;
+        const x1 = p.xs[lo], y1 = p.ys[lo], x2 = p.xs[lo + 1], y2 = p.ys[lo + 1];
+        return { x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t, ang: Math.atan2(y2 - y1, x2 - x1), idx: lo };
+    }
+
+    function makeLayer(w, h, dpr) {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * dpr));
+        c.height = Math.max(1, Math.round(h * dpr));
+        const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { canvas: c, ctx };
+    }
+    function initPathCanvas() {
+        const rect = pathCanvas.getBoundingClientRect();
+        pathCssW = Math.max(1, rect.width); pathCssH = Math.max(1, rect.height);
+        pathDpr = clamp(window.devicePixelRatio || 1, 1, 2.5);
+        pathCanvas.width = Math.round(pathCssW * pathDpr);
+        pathCanvas.height = Math.round(pathCssH * pathDpr);
+        pathCtx = pathCanvas.getContext('2d');
+        pathCtx.setTransform(pathDpr, 0, 0, pathDpr, 0, 0);   // setTransform 不会累积缩放
+        const base = makeLayer(pathCssW, pathCssH, pathDpr); baseCanvas = base.canvas; baseCtx = base.ctx;
+        const trail = makeLayer(pathCssW, pathCssH, pathDpr); trailCanvas = trail.canvas; trailCtx = trail.ctx;
+        pathNeedsRender = true;
+        if (pathData) rebuildBase();
+        renderPathFrame();
+    }
+    function drawGrid(ctx) {
+        ctx.strokeStyle = 'rgba(0,229,255,0.07)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = PATH_GRID; x < pathCssW; x += PATH_GRID) { ctx.moveTo(x, 0); ctx.lineTo(x, pathCssH); }
+        for (let y = PATH_GRID; y < pathCssH; y += PATH_GRID) { ctx.moveTo(0, y); ctx.lineTo(pathCssW, y); }
+        ctx.stroke();
+    }
+    // 静态底图只重绘一次：网格 + 完整轨迹（带辉光），行驶时不再逐帧重建路径
+    function rebuildBase() {
+        if (!baseCtx) return;
+        baseCtx.clearRect(0, 0, pathCssW, pathCssH);
+        drawGrid(baseCtx);
+        if (!pathData) return;
+        const p = pathData;
+        baseCtx.lineCap = 'round'; baseCtx.lineJoin = 'round';
+        baseCtx.beginPath(); baseCtx.moveTo(p.xs[0], p.ys[0]);
+        for (let i = 1; i < p.n; i++) baseCtx.lineTo(p.xs[i], p.ys[i]);
+        baseCtx.strokeStyle = 'rgba(0,229,255,0.12)'; baseCtx.lineWidth = 12; baseCtx.stroke();
+        baseCtx.strokeStyle = '#00e5ff'; baseCtx.lineWidth = 3;
+        baseCtx.shadowColor = '#00e5ff'; baseCtx.shadowBlur = 10; baseCtx.stroke();
+        baseCtx.shadowBlur = 0;
+    }
+    function clearPathCanvas() {
+        if (!pathCtx) return;
+        if (State.pathActive) cancelPath();
+        pathData = null; rawPts = []; hasLine = false; isDrawing = false; activePointerId = -1;
+        btnPathExec.disabled = true;
+        resetTrip();
+        if (baseCtx) { baseCtx.clearRect(0, 0, pathCssW, pathCssH); drawGrid(baseCtx); }
+        pathNeedsRender = true; renderPathFrame();
+        if (pathHint) pathHint.textContent = '按住画线，松手后可执行 · 按目标速度行驶，终点自动收油停车';
+    }
+    function resetTrip() {
+        trip.s = 0; trip.idx = 0; trip.ang = 0; trip.steer = 0; trip.v = 0; trip.trailIdx = 0; trip.trailS = 0; trip.done = false;
+        if (trailCtx) trailCtx.clearRect(0, 0, pathCssW, pathCssH);
+        pathNeedsRender = true;
+    }
+
+    function canvasPos(e) {
+        const r = pathCanvas.getBoundingClientRect();
+        return { x: clamp(e.clientX - r.left, 0, pathCssW), y: clamp(e.clientY - r.top, 0, pathCssH) };
+    }
+    // 事件只在初始化时注册一次，用 Pointer Events 统一鼠标/触摸
+    pathCanvas.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        if (!pathCtx) initPathCanvas();
+        if (State.pathActive) cancelPath();
+        isDrawing = true; activePointerId = e.pointerId; hasLine = false;
+        rawPts = []; pathData = null; btnPathExec.disabled = true; resetTrip();
+        pathCtx.clearRect(0, 0, pathCssW, pathCssH); drawGrid(pathCtx);
+        const p = canvasPos(e); rawPts.push(p);
+        try { pathCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+        pathNeedsRender = false;
+        if (pathHint) pathHint.textContent = '绘制中…松手完成';
+    });
+    pathCanvas.addEventListener('pointermove', (e) => {
+        if (!isDrawing || e.pointerId !== activePointerId) return;
+        e.preventDefault();
+        const p = canvasPos(e);
+        const last = rawPts[rawPts.length - 1];
+        if (!last) return;
+        const d = Math.hypot(p.x - last.x, p.y - last.y);
+        if (d < PATH_MIN_DIST) return;                       // 距离阈值过滤抖动/重复点
+        if (rawPts.length >= PATH_MAX_PTS) return;            // 点数上限，防止点数爆炸
+        rawPts.push(p);
+        // 只增量绘制新增的一小段：不再每次 move 都 clear+全量重画（原卡死根因）
+        pathCtx.lineCap = 'round'; pathCtx.lineJoin = 'round';
+        pathCtx.beginPath(); pathCtx.moveTo(last.x, last.y); pathCtx.lineTo(p.x, p.y);
+        pathCtx.strokeStyle = 'rgba(0,229,255,0.16)'; pathCtx.lineWidth = 10; pathCtx.stroke();
+        pathCtx.strokeStyle = '#00e5ff'; pathCtx.lineWidth = 3; pathCtx.stroke();
+    });
+    function finishStroke(commit) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        if (activePointerId >= 0) { try { pathCanvas.releasePointerCapture(activePointerId); } catch (err) {} }
+        activePointerId = -1;
+        if (!commit) return;
+        if (rawPts.length < 2) { hasLine = false; btnPathExec.disabled = true; return; }
+        const simplified = simplifyPath(rawPts, PATH_TOL);
+        pathData = buildPath(simplified);
+        if (!pathData) {
+            hasLine = false; btnPathExec.disabled = true;
+            if (pathHint) pathHint.textContent = '线条太短/只有单点，请重画一条更长的线';
+            return;
+        }
+        hasLine = true; btnPathExec.disabled = false;
+        resetTrip();
+        trip.ang = poseAt(0) ? poseAt(0).ang : 0;
+        rebuildBase(); pathNeedsRender = true; renderPathFrame();
+        if (pathHint) pathHint.textContent = `轨迹就绪 · 弧长 ${Math.round(pathData.total)}px · 点「执行」`;
+    }
+    pathCanvas.addEventListener('pointerup', (e) => { if (e.pointerId === activePointerId) finishStroke(true); });
+    pathCanvas.addEventListener('pointercancel', (e) => { if (e.pointerId === activePointerId) finishStroke(true); });
+    // 指针捕获失效/画到画布外松手时，兜底结束这一笔
+    window.addEventListener('pointerup', (e) => { if (isDrawing && e.pointerId === activePointerId) finishStroke(true); });
+    window.addEventListener('pointercancel', (e) => { if (isDrawing && e.pointerId === activePointerId) finishStroke(true); });
+
+    function drawCar(ctx, x, y, ang, steer) {
+        const vis = clamp(steer / STEER_MAX, -1, 1) * STEER_VISUAL_DEG * Math.PI / 180;
+        ctx.save();
+        ctx.translate(x, y); ctx.rotate(ang);
+        ctx.fillStyle = '#050505';
+        // 后轮固定（车身朝向始终贴合轨迹切线）
+        ctx.fillRect(-10, -CAR_W / 2 - 3, 7, 3); ctx.fillRect(-10, CAR_W / 2, 7, 3);
+        // 前轮按实际舵量偏转：视觉上能明显看出打舵
+        ctx.save(); ctx.translate(7.5, -CAR_W / 2 - 1.5); ctx.rotate(vis); ctx.fillRect(-3.5, -1.5, 7, 3); ctx.restore();
+        ctx.save(); ctx.translate(7.5, CAR_W / 2 + 1.5); ctx.rotate(vis); ctx.fillRect(-3.5, -1.5, 7, 3); ctx.restore();
+        const grd = ctx.createLinearGradient(-CAR_L / 2, 0, CAR_L / 2, 0);
+        grd.addColorStop(0, '#00838f'); grd.addColorStop(0.55, '#7df9ff'); grd.addColorStop(1, '#00e5ff');
+        ctx.fillStyle = grd; ctx.shadowColor = '#00e5ff'; ctx.shadowBlur = 14;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-CAR_L / 2, -CAR_W / 2, CAR_L, CAR_W, 4);
+        else ctx.rect(-CAR_L / 2, -CAR_W / 2, CAR_L, CAR_W);
+        ctx.fill(); ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(4,18,24,0.9)';
+        ctx.fillRect(-2, -CAR_W / 2 + 3, 7, CAR_W - 6);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(-CAR_L / 2 + 2, -3, 3, 6);
+        // 车头指向指示：按同一舵量偏转，视觉转向幅度与舵机一致
+        ctx.save(); ctx.translate(CAR_L / 2 - 2, 0); ctx.rotate(vis);
+        ctx.fillStyle = 'rgba(0,229,255,0.95)';
+        ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(2, -3); ctx.lineTo(2, 3); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.restore();
+    }
+
+    // 已驶过轨迹只增量追加，不每帧重画整条路径
+    function extendTrail(toS) {
+        const p = pathData; if (!p || !trailCtx) return;
+        const from = trip.trailS;
+        if (toS <= from + 1e-6) return;
+        let i = Math.min(Math.max(trip.trailIdx, 0), p.n - 2);
+        const a = poseAt(from), b = poseAt(toS);
+        trailCtx.lineCap = 'round';
+        trailCtx.beginPath(); trailCtx.moveTo(a.x, a.y);
+        let guard = 0;
+        while (i < p.n - 2 && p.cum[i + 1] <= toS && guard++ < p.n) { i++; trailCtx.lineTo(p.xs[i], p.ys[i]); }
+        trailCtx.lineTo(b.x, b.y);
+        trailCtx.strokeStyle = 'rgba(0,229,255,0.5)'; trailCtx.lineWidth = 6;
+        trailCtx.shadowColor = '#00e5ff'; trailCtx.shadowBlur = 10; trailCtx.stroke();
+        trailCtx.shadowBlur = 0;
+        trip.trailIdx = i; trip.trailS = toS;
+    }
+
+    function renderPathFrame() {
+        if (!pathCtx || !pathLayer.classList.contains('show')) return;
+        if (!pathNeedsRender && !State.pathActive) return;
+        pathCtx.clearRect(0, 0, pathCssW, pathCssH);
+        if (baseCanvas) pathCtx.drawImage(baseCanvas, 0, 0, pathCssW, pathCssH);
+        if (trailCanvas) pathCtx.drawImage(trailCanvas, 0, 0, pathCssW, pathCssH);
+        if (pathData) {
+            const pose = poseAt(trip.s);
+            if (pose) drawCar(pathCtx, pose.x, pose.y, trip.done ? pose.ang : trip.ang, trip.done ? 0 : trip.steer);
+        }
+        pathNeedsRender = false;
+    }
+
+    let lastPathPct = 0;
+
+    // 前瞻航向变化(rad)：弯道降速与打舵共用同一份前瞻数据，直线≈0
+    function pathLookaheadAngle() {
+        if (!pathData) return 0;
+        const a1 = poseAt(trip.s).ang;
+        const a2 = poseAt(Math.min(pathData.total, trip.s + STEER_LOOKAHEAD)).ang;
+        return normAngle(a2 - a1);
+    }
+    // 目标舵量（-STEER_MAX~+STEER_MAX）：沿用原版前瞻位置，只把系数×STEER_GAIN 并放宽限幅
+    function pathSteerTarget() {
+        return clamp(pathLookaheadAngle() * STEER_BASE_COEF * STEER_GAIN, -STEER_MAX, STEER_MAX);
+    }
+
+    // 速度上限基准：按画布尺度自适应；短线按弧长比例再降一档，避免起步就冲过终点
+    function pathSpeedRef() {
+        if (!pathData) return PATH_V_MAX;
+        const scale = clamp(Math.min(pathCssW, pathCssH) / 500, 0.7, 1.6);
+        const shortGuard = clamp(pathData.total / PATH_SHORT_LEN, 0.35, 1);
+        return PATH_V_MAX * scale * shortGuard;
+    }
+    // 当前速度对应的 c1（512 + 开度偏置）：速度越低 c1 越靠近中位；弯中保留最低开度避免“有速度没油”停住
+    function pathC1() {
+        const vRef = pathSpeedRef();
+        let ratio = clamp(trip.v / vRef, 0, 1);
+        const minRatio = 0.35;                 // 弯中最低油门比例：保证转弯时仍有明显动力
+        if (trip.v > PATH_STOP_V && ratio < minRatio) ratio = minRatio;
+        const off = Math.round(ratio * THROTTLE_MAX_OFFSET);
+        return 512 + off;
+    }
+
+    // 核心行驶：速度按「加速度上限 + 弯道降速 + 终点 sqrt 提前收油」规划，再按 dt 推进弧长
+    function updatePathMotion(dt) {
+        if (!State.pathActive || !pathData || trip.done || State.handbrake) return;
+        const p = pathData;
+        const vRef = pathSpeedRef();
+        const remaining = Math.max(0, p.total - trip.s);
+        const da = pathLookaheadAngle();
+        // 弯道降速：前瞻转角越大目标速度越低，最低保留 CURVE_MIN_RATIO
+        const curveRatio = clamp(1 - CURVE_SLOW_K * Math.min(1, Math.abs(da) / CURVE_REF_RAD), CURVE_MIN_RATIO, 1);
+        let vDes = vRef * curveRatio;
+        // 弯中最低可行驶速度：只要还没到终点附近，就不允许被降到 0，避免转弯卡死
+        const nearEnd = remaining <= Math.max(6, PATH_STOP_V * 0.5);
+        if (!nearEnd && vDes < PATH_STOP_V) vDes = PATH_STOP_V;
+        // 终点提前收油：按 sqrt(2*a*剩余弧长) 限速，保证到点前速度已降下来，不瞬切
+        const stopCap = Math.sqrt(2 * PATH_DEC * remaining);
+        if (vDes > stopCap) vDes = stopCap;
+        if (trip.v < vDes) trip.v = Math.min(vDes, trip.v + PATH_ACC * dt);
+        else trip.v = Math.max(vDes, trip.v - PATH_DEC * dt);
+        // 只在中途保留一个可行驶下限，避免 trip.v 被归零导致 step=0 卡住
+        if (!nearEnd) { if (trip.v < PATH_STOP_V) trip.v = PATH_STOP_V; }
+        else if (trip.v < 0.5) trip.v = 0;
+        let step = trip.v * dt;
+        if (!isFinite(step) || step < 0) step = 0;
+        if (step > PATH_MAX_STEP) step = PATH_MAX_STEP;   // 掉帧/后台恢复时限制单帧位移
+        if (step > remaining) step = remaining;
+        if (step > 0) {
+            trip.s += step;
+            if (trip.s >= p.total) {
+                if (loopMode) {
+                    trip.s -= p.total; trip.idx = 0; trip.trailIdx = 0; trip.trailS = 0;
+                    if (trailCtx) trailCtx.clearRect(0, 0, pathCssW, pathCssH);
+                    const p0 = poseAt(0); if (p0) trip.ang = p0.ang;
+                } else {
+                    trip.s = p.total; trip.idx = p.n - 2;
+                    extendTrail(p.total);
+                }
+            } else {
+                while (trip.idx < p.n - 2 && p.cum[trip.idx + 1] <= trip.s) trip.idx++;
+                extendTrail(trip.s);
+            }
+        }
+        // 到点：先停在终点等速度自然降到阈值以下，再发 512 停车（低速到点，不硬停）
+        if (!loopMode && p.total - trip.s <= 0.5 && trip.v <= PATH_STOP_V) {
+            trip.done = true; pathNeedsRender = true;
+            finishPathArrive();
+            return;
+        }
+        const pose = poseAt(trip.s);
+        if (pose) {
+            const delta = normAngle(pose.ang - trip.ang);
+            trip.ang = normAngle(trip.ang + delta * Math.min(1, 10 * dt));  // 切线朝向 + 轻微平滑
+        }
+        // 转向：目标舵量按增益放大，再做斜率限制与限幅（不会过冲/抖动）
+        const steerTarget = pathSteerTarget();
+        const maxChange = STEER_SLEW * dt;
+        let ds = steerTarget - trip.steer;
+        if (ds > maxChange) ds = maxChange; else if (ds < -maxChange) ds = -maxChange;
+        trip.steer = clamp(trip.steer + ds, -STEER_MAX, STEER_MAX);
+        const pct = Math.floor(clamp(trip.s / p.total, 0, 1) * 100);
+        if (pct !== lastPathPct) { lastPathPct = pct; showPathProgress(pct); }
+    }
+
+    function finishPathArrive() {
+        if (!State.pathActive) return;
+        State.pathActive = false;
+        trip.steer = 0; trip.v = 0;             // 停车即回中、收油
+        applyModeUI(State.restoreMode);
+        hidePathProgress();
+        btnPathExec.disabled = false;
+        if (pathHint) pathHint.textContent = '已到达终点 · 低速收油停车，重画新线可再次行驶';
+        if (ws && ws.readyState === 1) ws.send(`c1:512,c2:512,c3:${State.lamp},mode:${State.driveMode},hb:${State.handbrake ? 1 : 0}`);
+        lastC1 = 512; debugLog('PATH DONE'); dirty = true;
+    }
+
+    function startPathExecution() {
+        if (!pathData) return;
+        if (State.gear !== 'D') {
+            const dIdx = gears.findIndex(g => g.name === 'D');
+            if (dIdx >= 0) updateGearUI(dIdx);
+        }
+        coastActive = false;
+        State.restoreMode = State.driveMode;
+        applyModeUI(0);
+        resetTrip();
+        const p0 = poseAt(0); trip.ang = p0 ? p0.ang : 0;
+        State.pathActive = true; State.pathStartTime = performance.now();
+        btnPathExec.disabled = true;
+        lastPathPct = 0; showPathProgress(0);
+        if (pathHint) pathHint.textContent = '行驶中…可点「关闭」或重画中止';
+        pathNeedsRender = true; renderPathFrame();
+        dirty = true;
+    }
+
+    // immediate=true 立即 512 兜底（切后台/断线/手刹）；否则斜坡收油约 300ms 再归零
+    function cancelPath(immediate) {
+        if (!State.pathActive) return;
+        State.pathActive = false; hidePathProgress();
+        trip.steer = 0; trip.v = 0;             // 中止即回中、收油
+        applyModeUI(State.restoreMode);
+        btnPathExec.disabled = !hasLine;
+        if (pathHint) pathHint.textContent = immediate ? '已停止 · 立即收油' : '已中止 · 收油滑行中';
+        if (immediate) {
+            coastActive = false;
+            if (ws && ws.readyState === 1) ws.send(`c1:512,c2:512,c3:${State.lamp},mode:${State.driveMode},hb:${State.handbrake ? 1 : 0}`);
+            lastC1 = 512;
+        } else {
+            startCoast();
+        }
+        pathNeedsRender = true;
+    }
+    function showPathProgress(pct) {
+        let el = document.getElementById('pathProgress');
+        if (!el) {
+            el = document.createElement('div'); el.id = 'pathProgress';
+            el.style.cssText = 'position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:2600;padding:6px 16px;border-radius:20px;background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.5);color:#00e5ff;font-size:12px;font-weight:bold;font-family:monospace;letter-spacing:1px;text-shadow:0 0 10px rgba(0,229,255,0.8);box-shadow:0 0 20px rgba(0,229,255,0.25);pointer-events:none;white-space:nowrap;';
+            document.body.appendChild(el);
+        }
+        el.textContent = `航路执行中 ${pct}%`; el.style.display = 'block';
+    }
+    function hidePathProgress() { const el = document.getElementById('pathProgress'); if (el) el.style.display = 'none'; }
+
+    function pathOverrideSend(now) {
+        if (!State.pathActive) return false;
+        coastActive = false;                     // 画线行驶优先，收油让位
+        if (!ws || ws.readyState !== 1) { debugLog('PATH: WS NOT READY'); return true; }
+        if (now - lastSendTime < SEND_INTERVAL) return true;
+        const c1 = pathC1();
+        const c2 = Math.round(clamp(512 + trip.steer, 512 - STEER_MAX, 512 + STEER_MAX));
+        ws.send(`c1:${c1},c2:${c2},c3:${State.lamp},mode:${State.driveMode},hb:0`);
+        lastC1 = c1;
+        debugLog(`PATH c1:${c1} c2:${c2} v:${trip.v.toFixed(0)} steer:${trip.steer.toFixed(0)} s:${Math.round(trip.s)}`);
+        lastSendTime = now; return true;
+    }
+
+    function openPathLayer() {
+        pathLayer.classList.add('show'); btnPath.classList.add('on');
+        setTimeout(() => {
+            initPathCanvas();
+            if (!pathData) clearPathCanvas();
+            else { btnPathExec.disabled = !hasLine; renderPathFrame(); }
+        }, 50);
+    }
+    function closePathLayer() {
+        if (isDrawing) { isDrawing = false; activePointerId = -1; rawPts = []; }  // 半截笔画作废
+        if (State.pathActive) cancelPath();     // 关闭画板即停车，不留后台运动
+        pathLayer.classList.remove('show'); btnPath.classList.remove('on');
+    }
+
+    btnPath.addEventListener('click', () => { if (pathLayer.classList.contains('show')) closePathLayer(); else openPathLayer(); });
+    btnPathClose.addEventListener('click', closePathLayer);
+    btnPathClear.addEventListener('click', () => { clearPathCanvas(); });
+    btnPathExec.addEventListener('click', () => { if (hasLine && pathData) startPathExecution(); });
+    btnPathLoop.addEventListener('click', () => {
+        loopMode = !loopMode;
+        btnPathLoop.classList.toggle('on', loopMode);
+        btnPathLoop.innerText = loopMode ? '循环中' : '循环';
+        if (pathHint) pathHint.textContent = loopMode ? '循环模式：到终点后自动从头再跑' : '单次模式：到终点后停住';
+    });
+    window.addEventListener('resize', () => { if (pathLayer.classList.contains('show')) initPathCanvas(); });
+
+    setTimeout(() => updateGearUI(1), 100);
+    applyModeUI(0); updateGyroBall(0);
+
+    requestAnimationFrame(mainLoop);
+    initWS();
+    </script>
+</body></html>
